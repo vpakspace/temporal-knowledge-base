@@ -144,11 +144,45 @@ pytest tests/
 - **`EntityResolver.resolve_batch`**: Graphiti nodes с `id: None` проникали через fulltext search → добавлена проверка `existing.get("id")`
 - **`IngestionPipeline`**: Graphiti Stage 1 ошибки теперь не блокируют наш temporal layer (stages 2-5)
 
+## MCP Server (Claude Code integration)
+
+MCP server предоставляет 6 tools для прямой работы с TKB из Claude Code.
+
+**Файл**: `mcp_server.py` (корень проекта)
+**Запуск**: `python3 mcp_server.py`
+**Регистрация**: `~/.claude.json` → `mcpServers.temporal-kb`
+
+### MCP Tools
+
+| Tool | Описание | Ключевые параметры |
+|------|----------|--------------------|
+| `tkb_ingest` | Добавить эпизод в граф знаний | `content`, `source`, `episode_type?`, `reference_time?`, `group_id?` |
+| `tkb_search` | Temporal-aware поиск фактов | `query`, `intent?` (hybrid/structural/temporal), `point_in_time?`, `limit?` |
+| `tkb_ask` | Поиск + LLM ответ | `question`, `include_timeline?` |
+| `tkb_timeline` | Timeline сущности | `entity_id` |
+| `tkb_evolution` | Цепочка SUPERSEDED_BY | `event_id` |
+| `tkb_stats` | Статистика графа | — |
+
+### Архитектура MCP
+
+- **Lazy singleton**: ресурсы (Neo4j, Graphiti, OpenAI) инициализируются при первом вызове tool
+- **Async**: все tools async (Neo4j и OpenAI клиенты async)
+- **Reuse**: используются существующие классы (IngestionPipeline, QueryEngine, ResponseBuilder)
+- **Testable**: `_impl` функции тестируются отдельно от FastMCP обёрток
+- **ENV**: `OPENAI_API_KEY` из .env (python-dotenv), `NEO4J_*` из MCP env config
+
+### Тесты MCP
+
+```bash
+PYTHONPATH=. pytest tests/test_mcp_server.py -v
+# 14 passed (all _impl functions with mocked dependencies)
+```
+
 ## Следующие шаги
 
 - [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
 - [x] GitHub repository ✅ (https://github.com/vpakspace/temporal-knowledge-base)
 - [x] API + UI тестирование ✅ (Ingest, Search, Stats работают через Streamlit)
+- [x] MCP server для интеграции с Claude Code ✅ (6 tools, 14 unit тестов)
 - [ ] Document loaders (PDF, HTML, JSON files)
 - [ ] Community detection (Graphiti `build_communities`)
-- [ ] MCP server для интеграции с Claude Code
