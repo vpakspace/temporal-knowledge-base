@@ -1,0 +1,15 @@
+[project]
+name = "temporal-knowledge-base"
+version = "0.1.0"
+description = "Temporal Knowledge Base framework based on Graphiti + GraphOS architecture"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+extraPaths = ["."]
