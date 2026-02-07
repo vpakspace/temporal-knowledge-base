@@ -137,14 +137,18 @@ pytest tests/
 | `test_integration_extraction.py` | 5 | Dual-track extraction (entities, relationships, fact types, Russian text) |
 | `test_integration_pipeline.py` | 4 | E2E pipeline: ingest → extract → resolve → store → search → respond |
 
-### Bugfix найденный при тестировании
+### Bugfixes найденные при тестировании
 
 - **`get_supersession_chain`**: Cypher `UNWIND nodes(path)` возвращал дубликаты при path length 0 → добавлен `WITH DISTINCT te`
+- **`GraphitiClient.add_episode`**: `datetime.now()` (naive) → `datetime.now(UTC)` (timezone-aware), Graphiti v0.26.3 требует UTC
+- **`EntityResolver.resolve_batch`**: Graphiti nodes с `id: None` проникали через fulltext search → добавлена проверка `existing.get("id")`
+- **`IngestionPipeline`**: Graphiti Stage 1 ошибки теперь не блокируют наш temporal layer (stages 2-5)
 
 ## Следующие шаги
 
 - [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
 - [x] GitHub repository ✅ (https://github.com/vpakspace/temporal-knowledge-base)
+- [x] API + UI тестирование ✅ (Ingest, Search, Stats работают через Streamlit)
 - [ ] Document loaders (PDF, HTML, JSON files)
 - [ ] Community detection (Graphiti `build_communities`)
 - [ ] MCP server для интеграции с Claude Code

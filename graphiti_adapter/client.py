@@ -10,7 +10,7 @@ Wraps graphiti-core to provide:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from graphiti_core import Graphiti
@@ -102,7 +102,7 @@ class GraphitiClient:
         4. Handle temporal invalidation of superseded facts
         """
         if reference_time is None:
-            reference_time = datetime.now()
+            reference_time = datetime.now(UTC)
 
         graphiti_type = _EPISODE_TYPE_MAP.get(episode_type, GraphitiEpisodeType.text)
 
@@ -192,7 +192,7 @@ class GraphitiClient:
     ) -> list[dict[str, Any]]:
         """Retrieve stored episodes."""
         if reference_time is None:
-            reference_time = datetime.now()
+            reference_time = datetime.now(UTC)
         try:
             episodes = await self.graphiti.retrieve_episodes(
                 reference_time=reference_time,

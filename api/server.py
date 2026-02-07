@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -126,16 +126,19 @@ async def ingest_episode(req: IngestRequest):
     except ValueError:
         ep_type = EpisodeType.TEXT
 
+    reference_time = req.reference_time or datetime.now(UTC)
+
     try:
         result = await pipeline.ingest_episode(
             content=req.content,
             source=req.source,
             episode_type=ep_type,
-            reference_time=req.reference_time,
+            reference_time=reference_time,
             group_id=req.group_id,
         )
         return {"success": True, "data": result}
     except Exception as e:
+        logger.exception("Ingest failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

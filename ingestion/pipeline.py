@@ -88,14 +88,20 @@ class IngestionPipeline:
         logger.info("Ingesting episode '%s' (type=%s)", source, episode_type.value)
 
         # Stage 1: Graphiti ingestion (handles entity extraction + edge creation)
-        graphiti_result = await self._graphiti.add_episode(
-            name=source,
-            content=content,
-            source=source,
-            reference_time=reference_time,
-            episode_type=episode_type,
-            group_id=group_id,
-        )
+        # Graphiti may fail on some inputs (e.g., null entity IDs during extraction)
+        # but our temporal layer (stages 2-5) should still proceed.
+        graphiti_result: dict[str, Any] = {}
+        try:
+            graphiti_result = await self._graphiti.add_episode(
+                name=source,
+                content=content,
+                source=source,
+                reference_time=reference_time,
+                episode_type=episode_type,
+                group_id=group_id,
+            )
+        except Exception as e:
+            logger.warning("Graphiti ingestion failed (continuing with temporal layer): %s", e)
 
         # Stage 2: Chunk for our temporal layer
         chunks = self._chunker.chunk(content)

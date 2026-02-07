@@ -46,7 +46,7 @@ class EntityResolver:
 
             # Check if entity exists in graph
             existing = await self._find_existing(entity)
-            if existing:
+            if existing and existing.get("id"):
                 entity.id = existing["id"]
                 entity.canonical_name = existing.get("canonical_name") or existing["name"]
                 logger.debug(
