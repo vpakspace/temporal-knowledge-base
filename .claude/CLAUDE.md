@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Commit**: `dba99d4`
-**Тесты**: 33 passed
+**Тесты**: 63 passed (33 unit + 30 integration)
 
 ## Технологический стек
 
@@ -64,7 +64,7 @@ Layers 6-7:  Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
 | `generation/` | LLM client, temporal verifier (Layer 14), response builder |
 | `api/` | FastAPI server (6 endpoints) |
 | `ui/` | Streamlit UI (4 tabs: Ingest, Search, Timeline, Stats) |
-| `tests/` | 33 unit тестов |
+| `tests/` | 63 тестов (33 unit + 30 integration) |
 
 ## Запуск
 
@@ -115,10 +115,36 @@ Notebook зарегистрирован в библиотеке NotebookLM MCP:
 - **URL**: `https://notebooklm.google.com/notebook/d751931b-6723-41f4-a071-3c787a2d51d3`
 - **Topics**: Graphiti, GraphOS, bi-temporal KG, invalidation agents, Neo4j, hybrid search
 
+## Тестирование
+
+```bash
+# Unit тесты только (без внешних зависимостей)
+pytest tests/ -m "not integration"
+
+# Integration тесты (требуют Neo4j + OpenAI API key)
+pytest tests/ -m integration
+
+# Все тесты
+pytest tests/
+```
+
+### Integration тесты (30 тестов)
+
+| Файл | Тесты | Что проверяет |
+|------|-------|---------------|
+| `test_integration_neo4j.py` | 10 | CRUD entities/events, supersession chains, point-in-time, timeline, stats |
+| `test_integration_openai.py` | 11 | Embeddings (single/batch/similarity), LLM generation, intent classification, contradiction detection |
+| `test_integration_extraction.py` | 5 | Dual-track extraction (entities, relationships, fact types, Russian text) |
+| `test_integration_pipeline.py` | 4 | E2E pipeline: ingest → extract → resolve → store → search → respond |
+
+### Bugfix найденный при тестировании
+
+- **`get_supersession_chain`**: Cypher `UNWIND nodes(path)` возвращал дубликаты при path length 0 → добавлен `WITH DISTINCT te`
+
 ## Следующие шаги
 
-- [ ] Integration test с реальным Neo4j + OpenAI API
+- [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
+- [x] GitHub repository ✅ (https://github.com/vpakspace/temporal-knowledge-base)
 - [ ] Document loaders (PDF, HTML, JSON files)
 - [ ] Community detection (Graphiti `build_communities`)
 - [ ] MCP server для интеграции с Claude Code
-- [ ] GitHub repository

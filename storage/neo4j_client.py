@@ -284,6 +284,7 @@ class Neo4jClient:
         query = """
         MATCH path = (start:TemporalEvent {id: $event_id})-[:SUPERSEDED_BY*0..]->(end)
         UNWIND nodes(path) AS te
+        WITH DISTINCT te
         RETURN te.id AS id, te.statement AS statement,
                te.valid_at AS valid_at, te.invalid_at AS invalid_at,
                te.is_current AS is_current

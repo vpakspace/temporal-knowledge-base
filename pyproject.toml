@@ -8,6 +8,9 @@ requires-python = ">=3.11"
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: tests requiring real Neo4j and/or OpenAI API",
+]
 
 [tool.pyright]
 pythonVersion = "3.12"
