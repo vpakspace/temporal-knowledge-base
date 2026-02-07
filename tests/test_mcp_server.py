@@ -213,6 +213,69 @@ async def test_search_invalid_intent_fallback(patch_get_state):
 # --- tkb_ask ---
 
 
+# --- _extract_temporal_hint ---
+
+
+class TestExtractTemporalHint:
+    """Tests for temporal hint extraction from questions."""
+
+    def test_standalone_year(self):
+        """Extract year from '2023'."""
+        result = mcp_server._extract_temporal_hint("что случилось в 2023 году")
+        assert result is not None
+        assert result.year == 2023
+        assert result.month == 12
+        assert result.day == 31
+
+    def test_english_year(self):
+        """Extract year from 'in 2024'."""
+        result = mcp_server._extract_temporal_hint("what happened in 2024")
+        assert result is not None
+        assert result.year == 2024
+
+    def test_russian_month_year(self):
+        """Extract month+year from 'в январе 2024'."""
+        result = mcp_server._extract_temporal_hint("сколько в январе 2024")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 1
+
+    def test_russian_month_year_december(self):
+        """Extract month+year from 'в декабре 2023'."""
+        result = mcp_server._extract_temporal_hint("что было в декабре 2023")
+        assert result is not None
+        assert result.year == 2023
+        assert result.month == 12
+
+    def test_english_month_year(self):
+        """Extract month+year from 'January 2025'."""
+        result = mcp_server._extract_temporal_hint("investment in January 2025")
+        assert result is not None
+        assert result.year == 2025
+        assert result.month == 1
+
+    def test_year_range(self):
+        """Extract end of range from '2023-2024'."""
+        result = mcp_server._extract_temporal_hint("события 2023-2024")
+        assert result is not None
+        assert result.year == 2024
+        assert result.month == 12
+
+    def test_no_temporal_hint(self):
+        """No date in question returns None."""
+        result = mcp_server._extract_temporal_hint("кто является CEO")
+        assert result is None
+
+    def test_timezone_aware(self):
+        """Extracted datetime should be timezone-aware (UTC)."""
+        result = mcp_server._extract_temporal_hint("in 2023")
+        assert result is not None
+        assert result.tzinfo is not None
+
+
+# --- tkb_ask ---
+
+
 @pytest.mark.asyncio
 async def test_ask_basic(patch_get_state):
     """Test ask with LLM response."""
@@ -258,6 +321,112 @@ async def test_ask_with_timeline(patch_get_state):
 
     call_kwargs = patch_get_state.response_builder.build_response.call_args.kwargs
     assert call_kwargs["include_timeline"] is True
+
+
+@pytest.mark.asyncio
+async def test_ask_extracts_temporal_hint(patch_get_state):
+    """Test that ask with a year in the question passes point_in_time to search."""
+    patch_get_state.query_engine.search.return_value = SearchResponse(
+        query=SearchQuery(query="investment in 2023"),
+        results=[
+            SearchResult(id="r-1", content="Microsoft invested $1B"),
+            SearchResult(id="r-2", content="OpenAI was valued at $29B"),
+            SearchResult(id="r-3", content="Sam Altman was CEO"),
+            SearchResult(id="r-4", content="Partnership announced"),
+            SearchResult(id="r-5", content="AI sector growth"),
+        ],
+        total_count=5,
+    )
+    patch_get_state.response_builder.build_response.return_value = {
+        "answer": "Microsoft invested $1B in OpenAI in 2023.",
+        "facts_used": 2,
+        "sources": [],
+        "timeline": None,
+    }
+
+    await mcp_server._tkb_ask_impl(question="сколько Microsoft инвестировал в 2023 году")
+
+    # First search call should have point_in_time set
+    first_call = patch_get_state.query_engine.search.call_args_list[0]
+    search_query = first_call[0][0]
+    assert search_query.point_in_time is not None
+    assert search_query.point_in_time.year == 2023
+
+
+@pytest.mark.asyncio
+async def test_ask_no_temporal_hint_no_point_in_time(patch_get_state):
+    """Test that ask without temporal reference does not set point_in_time."""
+    patch_get_state.query_engine.search.return_value = SearchResponse(
+        query=SearchQuery(query="Who is CEO?"),
+        results=[
+            SearchResult(id="r-1", content="Alice is CEO"),
+        ],
+        total_count=1,
+    )
+    patch_get_state.response_builder.build_response.return_value = {
+        "answer": "Alice.",
+        "facts_used": 1,
+        "sources": [],
+        "timeline": None,
+    }
+
+    await mcp_server._tkb_ask_impl(question="кто является CEO OpenAI")
+
+    first_call = patch_get_state.query_engine.search.call_args_list[0]
+    search_query = first_call[0][0]
+    assert search_query.point_in_time is None
+
+
+@pytest.mark.asyncio
+async def test_ask_broadens_search_on_few_results(patch_get_state):
+    """Test that ask performs a second broader search when few results found."""
+    # First search returns few results (< 5) → triggers broad search
+    patch_get_state.query_engine.search.side_effect = [
+        SearchResponse(
+            query=SearchQuery(query="test"),
+            results=[
+                SearchResult(
+                    id="r-1",
+                    content="Microsoft invested $1B in 2023",
+                    temporal=TemporalMetadata(
+                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
+                    ),
+                ),
+            ],
+            total_count=1,
+        ),
+        SearchResponse(
+            query=SearchQuery(query="test"),
+            results=[
+                SearchResult(
+                    id="r-1",
+                    content="Microsoft invested $1B in 2023",
+                    temporal=TemporalMetadata(
+                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
+                    ),
+                ),
+                SearchResult(
+                    id="r-2",
+                    content="OpenAI valued at $29B",
+                    temporal=TemporalMetadata(
+                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
+                    ),
+                ),
+            ],
+            total_count=2,
+        ),
+    ]
+    patch_get_state.response_builder.build_response.return_value = {
+        "answer": "In 2023, Microsoft invested $1B.",
+        "facts_used": 2,
+        "sources": [],
+        "timeline": None,
+    }
+
+    await mcp_server._tkb_ask_impl(question="инвестиции в 2023 году")
+
+    # Should have made 2 search calls: primary + broad
+    assert patch_get_state.query_engine.search.call_count == 2
 
 
 # --- tkb_timeline ---

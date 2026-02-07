@@ -21,7 +21,7 @@ Usage:
                 "env": {
                     "NEO4J_URI": "bolt://localhost:7687",
                     "NEO4J_USER": "neo4j",
-                    "NEO4J_PASSWORD": "temporal-kb-2024"
+                    "NEO4J_PASSWORD": "temporal_kb_2026"
                 }
             }
         }
@@ -30,11 +30,11 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-from datetime import UTC, datetime
-from typing import Any, Optional
+import re
+from datetime import datetime, timezone
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -43,18 +43,8 @@ try:
 except ImportError:
     raise ImportError("fastmcp is required. Install with: pip install fastmcp")
 
-from core.config import AppSettings, get_settings
-from core.models import EpisodeType, IntentType, SearchQuery
-from generation.llm_client import LLMClient
-from generation.response_builder import ResponseBuilder
-from generation.temporal_verifier import TemporalVerifier
-from graphiti_adapter.client import GraphitiClient
-from ingestion.pipeline import IngestionPipeline
-from retrieval.query_engine import QueryEngine
-from storage.neo4j_client import Neo4jClient
-from storage.vector_store import VectorStore
-from temporal.invalidation_agent import InvalidationAgent
-from temporal.resolution import EntityResolver
+# Heavy imports are deferred to get_state() so the MCP server starts instantly.
+# This prevents Claude Code health-check timeouts.
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,14 +59,14 @@ class _State:
     """Holds initialized resources. Created once on first tool call."""
 
     def __init__(self) -> None:
-        self.neo4j: Neo4jClient | None = None
-        self.graphiti: GraphitiClient | None = None
-        self.vector_store: VectorStore | None = None
-        self.llm: LLMClient | None = None
-        self.pipeline: IngestionPipeline | None = None
-        self.query_engine: QueryEngine | None = None
-        self.response_builder: ResponseBuilder | None = None
-        self.settings: AppSettings | None = None
+        self.neo4j: Any = None
+        self.graphiti: Any = None
+        self.vector_store: Any = None
+        self.llm: Any = None
+        self.pipeline: Any = None
+        self.query_engine: Any = None
+        self.response_builder: Any = None
+        self.settings: Any = None
 
 
 _state: _State | None = None
@@ -88,6 +78,19 @@ async def get_state() -> _State:
 
     if _state is not None and _state.neo4j is not None:
         return _state
+
+    # Deferred imports — only loaded when first tool is called
+    from core.config import get_settings
+    from generation.llm_client import LLMClient
+    from generation.response_builder import ResponseBuilder
+    from generation.temporal_verifier import TemporalVerifier
+    from graphiti_adapter.client import GraphitiClient
+    from ingestion.pipeline import IngestionPipeline
+    from retrieval.query_engine import QueryEngine
+    from storage.neo4j_client import Neo4jClient
+    from storage.vector_store import VectorStore
+    from temporal.invalidation_agent import InvalidationAgent
+    from temporal.resolution import EntityResolver
 
     _state = _State()
     settings = get_settings()
@@ -144,6 +147,8 @@ async def _tkb_ingest_impl(
     group_id: str | None = None,
 ) -> dict[str, Any]:
     """Ingest an episode into the temporal knowledge graph."""
+    from core.models import EpisodeType
+
     state = await get_state()
 
     try:
@@ -175,6 +180,8 @@ async def _tkb_search_impl(
     limit: int = 10,
 ) -> dict[str, Any]:
     """Search the temporal knowledge graph."""
+    from core.models import IntentType, SearchQuery
+
     state = await get_state()
 
     try:
@@ -215,15 +222,115 @@ async def _tkb_search_impl(
     }
 
 
+def _extract_temporal_hint(question: str) -> datetime | None:
+    """Extract a temporal reference from a question for point-in-time search.
+
+    Supports patterns like:
+    - "в 2023 году", "in 2023", "2023"
+    - "в январе 2024", "January 2024"
+    - "в 2023-2024" (takes the end of range)
+    - "до 2024", "before 2024"
+
+    Returns a datetime at end-of-year/month for the detected period,
+    so point-in-time search captures all facts valid up to that moment.
+    """
+    q = question.lower()
+
+    # "в январе 2024" / "january 2024" / "jan 2024"
+    month_ru = {
+        "январ": 1, "феврал": 2, "март": 3, "апрел": 4,
+        "ма[йя]": 5, "июн": 6, "июл": 7, "август": 8,
+        "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
+    }
+    month_en = {
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4,
+        "may": 5, "jun": 6, "jul": 7, "aug": 8,
+        "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    }
+
+    # Russian month + year
+    for pattern, month in month_ru.items():
+        m = re.search(rf"{pattern}\w*\s+(\d{{4}})", q)
+        if m:
+            year = int(m.group(1))
+            return datetime(year, month, 28, 23, 59, 59, tzinfo=timezone.utc)
+
+    # English month + year
+    for pattern, month in month_en.items():
+        m = re.search(rf"{pattern}\w*\s+(\d{{4}})", q)
+        if m:
+            year = int(m.group(1))
+            return datetime(year, month, 28, 23, 59, 59, tzinfo=timezone.utc)
+
+    # Year range "2023-2024" — take end of range
+    m = re.search(r"(\d{4})\s*[-–]\s*(\d{4})", q)
+    if m:
+        year = int(m.group(2))
+        return datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+    # Standalone year: "в 2023 году", "in 2023", just "2023"
+    m = re.search(r"\b(20\d{2})\b", q)
+    if m:
+        year = int(m.group(1))
+        return datetime(year, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+    return None
+
+
 async def _tkb_ask_impl(
     question: str,
     include_timeline: bool = False,
 ) -> dict[str, Any]:
-    """Search the knowledge graph and generate an LLM response."""
+    """Search the knowledge graph and generate an LLM response.
+
+    Automatically extracts temporal references from the question
+    and uses them as point_in_time filters for more accurate results.
+    """
+    from core.models import IntentType, SearchQuery, SearchResponse, SearchResult
+
     state = await get_state()
 
-    search_query = SearchQuery(query=question, intent=IntentType.HYBRID, limit=10)
+    # Extract temporal hint from question
+    temporal_hint = _extract_temporal_hint(question)
+
+    # Primary search: hybrid (semantic + structural)
+    search_query = SearchQuery(
+        query=question,
+        intent=IntentType.HYBRID,
+        point_in_time=temporal_hint,
+        limit=15,
+    )
     search_response = await state.query_engine.search(search_query)
+
+    # If temporal hint detected and few results, do a broader structural search too
+    if temporal_hint and len(search_response.results) < 5:
+        broad_query = SearchQuery(
+            query=question,
+            intent=IntentType.STRUCTURAL,
+            limit=10,
+        )
+        broad_response = await state.query_engine.search(broad_query)
+
+        # Merge results, dedup by id
+        seen_ids = {r.id for r in search_response.results}
+        extra: list[SearchResult] = []
+        for r in broad_response.results:
+            if r.id not in seen_ids:
+                # If temporal hint present, prefer facts from that time period
+                if r.temporal and r.temporal.valid_at and temporal_hint:
+                    if r.temporal.valid_at <= temporal_hint:
+                        extra.append(r)
+                        seen_ids.add(r.id)
+                else:
+                    extra.append(r)
+                    seen_ids.add(r.id)
+
+        merged_results = search_response.results + extra
+        search_response = SearchResponse(
+            query=search_query,
+            results=merged_results[:15],
+            total_count=len(merged_results),
+        )
 
     result = await state.response_builder.build_response(
         query=question,

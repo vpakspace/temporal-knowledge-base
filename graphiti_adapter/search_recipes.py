@@ -26,18 +26,26 @@ def build_search_filters(query: SearchQuery) -> SearchFilters | None:
     """Build Graphiti SearchFilters from our SearchQuery model."""
     kwargs: dict = {}
 
+    # Point-in-time → filter edges with valid_at <= point
+    # valid_at is list[list[DateFilter]]: outer=OR, inner=AND
+    if query.point_in_time:
+        kwargs["valid_at"] = [[DateFilter(
+            date=query.point_in_time,
+            comparison_operator=ComparisonOperator.less_than_equal,
+        )]]
+
     # Time range filter on valid_at
     if query.time_range_start:
-        kwargs["valid_at"] = DateFilter(
+        kwargs["valid_at"] = [[DateFilter(
             date=query.time_range_start,
             comparison_operator=ComparisonOperator.greater_than_equal,
-        )
+        )]]
 
     if query.time_range_end:
-        kwargs["created_at"] = DateFilter(
+        kwargs["created_at"] = [[DateFilter(
             date=query.time_range_end,
             comparison_operator=ComparisonOperator.less_than_equal,
-        )
+        )]]
 
     # Entity type filter
     if query.entity_types:

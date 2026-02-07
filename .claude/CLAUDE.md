@@ -158,7 +158,7 @@ MCP server предоставляет 6 tools для прямой работы �
 |------|----------|--------------------|
 | `tkb_ingest` | Добавить эпизод в граф знаний | `content`, `source`, `episode_type?`, `reference_time?`, `group_id?` |
 | `tkb_search` | Temporal-aware поиск фактов | `query`, `intent?` (hybrid/structural/temporal), `point_in_time?`, `limit?` |
-| `tkb_ask` | Поиск + LLM ответ | `question`, `include_timeline?` |
+| `tkb_ask` | Поиск + LLM ответ (auto temporal hint extraction) | `question`, `include_timeline?` |
 | `tkb_timeline` | Timeline сущности | `entity_id` |
 | `tkb_evolution` | Цепочка SUPERSEDED_BY | `event_id` |
 | `tkb_stats` | Статистика графа | — |
@@ -175,14 +175,34 @@ MCP server предоставляет 6 tools для прямой работы �
 
 ```bash
 PYTHONPATH=. pytest tests/test_mcp_server.py -v
-# 14 passed (all _impl functions with mocked dependencies)
+# 25 passed (all _impl functions + _extract_temporal_hint + enhanced ask tests)
 ```
+
+### Auto Temporal Hint Extraction (2026-02-08)
+
+`tkb_ask` автоматически извлекает даты из вопросов и использует как `point_in_time`:
+- `_extract_temporal_hint()` — regex для рус/англ ("в 2023 году", "January 2024", "2023-2024")
+- `_tkb_ask_impl()` — передаёт hint в SearchQuery, делает broad search при <5 результатах
+- `build_search_filters()` — конвертирует `point_in_time` → `valid_at <= point` для Graphiti edges
+
+**Изменённые файлы**: `mcp_server.py`, `graphiti_adapter/search_recipes.py`, `mcp_launcher.py`
+
+### Graphiti Data Architecture
+
+Факты хранятся в **двух** местах:
+- **Graphiti edges** (основное) — через `add_episode()`, поля: `fact`, `valid_at`, `uuid`
+- **TemporalEvent nodes** (наш слой) — кастомные ноды для dual-track storage
+
+`point_in_time` фильтрация должна работать на **обоих** уровнях:
+- Edges: `build_search_filters()` → `SearchFilters(valid_at=DateFilter(...))`
+- TemporalEvent: `neo4j.query_point_in_time()`
 
 ## Следующие шаги
 
 - [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
 - [x] GitHub repository ✅ (https://github.com/vpakspace/temporal-knowledge-base)
 - [x] API + UI тестирование ✅ (Ingest, Search, Stats работают через Streamlit)
-- [x] MCP server для интеграции с Claude Code ✅ (6 tools, 14 unit тестов)
+- [x] MCP server для интеграции с Claude Code ✅ (6 tools, 25 unit тестов)
+- [x] Auto temporal hint extraction для tkb_ask ✅ (2026-02-08)
 - [ ] Document loaders (PDF, HTML, JSON files)
 - [ ] Community detection (Graphiti `build_communities`)
