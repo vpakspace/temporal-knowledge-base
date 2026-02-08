@@ -387,6 +387,29 @@ async def get_graph():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/export", dependencies=_auth)
+async def export_graph():
+    """Export full graph data as JSON."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        data = await neo4j.export_all()
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/import", dependencies=_auth)
+async def import_graph(data: dict):
+    """Import graph data from JSON export. Merges by ID (idempotent)."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        counts = await neo4j.import_all(data)
+        return {"success": True, "data": counts}
+    except Exception as e:
+        logger.exception("Import failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/stats", dependencies=_auth)
 async def get_stats():
     """Get graph statistics."""

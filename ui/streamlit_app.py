@@ -524,3 +524,58 @@ with tab_stats:
                         data.get("current_events", 0) / max(data.get("events", 1), 1),
                         text=f"{data.get('current_events', 0)} current / {invalidated} superseded",
                     )
+
+    st.divider()
+
+    # --- Export ---
+    st.subheader("Export / Import")
+
+    col_exp, col_imp = st.columns(2)
+
+    with col_exp:
+        if st.button("Export Graph Data"):
+            with st.spinner("Exporting..."):
+                result = api_call("GET", "/api/export")
+                if result and result.get("success"):
+                    export_data = result["data"]
+                    export_json = json.dumps(export_data, indent=2, default=str)
+                    st.download_button(
+                        label="Download JSON",
+                        data=export_json,
+                        file_name="tkb_export.json",
+                        mime="application/json",
+                    )
+                    st.success(
+                        f"Entities: {len(export_data.get('entities', []))}, "
+                        f"Events: {len(export_data.get('events', []))}, "
+                        f"Episodes: {len(export_data.get('episodes', []))}"
+                    )
+
+    with col_imp:
+        uploaded = st.file_uploader("Import JSON", type=["json"], key="import_json")
+        if uploaded is not None:
+            try:
+                import_data = json.loads(uploaded.read().decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                st.error("Invalid JSON file")
+                import_data = None
+
+            if import_data:
+                if import_data.get("version") != "1.0":
+                    st.warning("Unknown export version, may not be compatible")
+                st.info(
+                    f"Entities: {len(import_data.get('entities', []))}, "
+                    f"Events: {len(import_data.get('events', []))}, "
+                    f"Episodes: {len(import_data.get('episodes', []))}"
+                )
+                if st.button("Confirm Import"):
+                    with st.spinner("Importing..."):
+                        result = api_call("POST", "/api/import", json=import_data)
+                        if result and result.get("success"):
+                            counts = result["data"]
+                            st.success(
+                                f"Imported: {counts.get('entities', 0)} entities, "
+                                f"{counts.get('events', 0)} events, "
+                                f"{counts.get('episodes', 0)} episodes, "
+                                f"{counts.get('relationships', 0)} relationships"
+                            )

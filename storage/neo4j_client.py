@@ -422,6 +422,132 @@ class Neo4jClient:
 
         return {"nodes": nodes, "edges": edges}
 
+    # --- Export ---
+
+    async def export_all(self) -> dict[str, Any]:
+        """Export all graph data as JSON-serializable dict."""
+        entities_q = """
+        MATCH (e:Entity)
+        RETURN e {.*} AS data
+        """
+        events_q = """
+        MATCH (te:TemporalEvent)
+        OPTIONAL MATCH (te)-[:MENTIONS]->(e:Entity)
+        WITH te, collect(e.id) AS mention_ids
+        RETURN te {.*} AS data, mention_ids
+        """
+        episodes_q = """
+        MATCH (ep:Episode)
+        RETURN ep {.*} AS data
+        """
+        rels_q = """
+        MATCH (src:Entity)-[r:RELATES_TO]->(tgt:Entity)
+        RETURN r {.*, source_id: src.id, target_id: tgt.id} AS data
+        """
+        supersessions_q = """
+        MATCH (old:TemporalEvent)-[:SUPERSEDED_BY]->(new:TemporalEvent)
+        RETURN old.id AS old_id, new.id AS new_id
+        """
+        async with self.session() as session:
+            res = await session.run(entities_q)
+            entities = [dict(r["data"]) async for r in res]
+
+            res = await session.run(events_q)
+            events = []
+            async for r in res:
+                ev = dict(r["data"])
+                ev["mention_ids"] = r["mention_ids"]
+                events.append(ev)
+
+            res = await session.run(episodes_q)
+            episodes = [dict(r["data"]) async for r in res]
+
+            res = await session.run(rels_q)
+            relationships = [dict(r["data"]) async for r in res]
+
+            res = await session.run(supersessions_q)
+            supersessions = [{"old_id": r["old_id"], "new_id": r["new_id"]} async for r in res]
+
+        return {
+            "version": "1.0",
+            "entities": entities,
+            "events": events,
+            "episodes": episodes,
+            "relationships": relationships,
+            "supersessions": supersessions,
+        }
+
+    async def import_all(self, data: dict[str, Any]) -> dict[str, int]:
+        """Import graph data from export JSON. Merges by ID."""
+        counts = {"entities": 0, "events": 0, "episodes": 0, "relationships": 0, "supersessions": 0}
+
+        async with self.session() as session:
+            for e in data.get("entities", []):
+                await session.run(
+                    "MERGE (n:Entity {id: $id}) SET n += $props",
+                    id=e["id"],
+                    props={k: v for k, v in e.items() if v is not None},
+                )
+                counts["entities"] += 1
+
+            for ev in data.get("events", []):
+                mention_ids = ev.pop("mention_ids", [])
+                await session.run(
+                    "MERGE (n:TemporalEvent {id: $id}) SET n += $props",
+                    id=ev["id"],
+                    props={k: v for k, v in ev.items() if v is not None},
+                )
+                if mention_ids:
+                    await session.run(
+                        """
+                        MATCH (te:TemporalEvent {id: $eid})
+                        MATCH (e:Entity) WHERE e.id IN $eids
+                        MERGE (te)-[:MENTIONS]->(e)
+                        """,
+                        eid=ev["id"],
+                        eids=mention_ids,
+                    )
+                counts["events"] += 1
+
+            for ep in data.get("episodes", []):
+                await session.run(
+                    "MERGE (n:Episode {id: $id}) SET n += $props",
+                    id=ep["id"],
+                    props={k: v for k, v in ep.items() if v is not None},
+                )
+                counts["episodes"] += 1
+
+            for r in data.get("relationships", []):
+                source_id = r.pop("source_id", None)
+                target_id = r.pop("target_id", None)
+                if source_id and target_id:
+                    await session.run(
+                        """
+                        MATCH (src:Entity {id: $src}), (tgt:Entity {id: $tgt})
+                        MERGE (src)-[r:RELATES_TO {id: $rid}]->(tgt)
+                        SET r += $props
+                        """,
+                        src=source_id,
+                        tgt=target_id,
+                        rid=r.get("id", ""),
+                        props={k: v for k, v in r.items() if v is not None},
+                    )
+                    counts["relationships"] += 1
+
+            for s in data.get("supersessions", []):
+                await session.run(
+                    """
+                    MATCH (old:TemporalEvent {id: $old_id})
+                    MATCH (new:TemporalEvent {id: $new_id})
+                    MERGE (old)-[:SUPERSEDED_BY]->(new)
+                    """,
+                    old_id=s["old_id"],
+                    new_id=s["new_id"],
+                )
+                counts["supersessions"] += 1
+
+        return counts
+
     # --- Stats ---
 
     async def get_stats(self) -> dict[str, int]:

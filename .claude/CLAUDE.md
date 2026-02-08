@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 108 unit + 30 integration = 138 total
+**Тесты**: 110 unit + 30 integration = 140 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -95,6 +95,8 @@ docker compose up -d
 | GET | `/api/entities` | Список всех entities (для autocomplete) |
 | GET | `/api/entities/{entity_id}` | Детали entity (relationships, event counts) |
 | GET | `/api/graph` | Nodes + edges для визуализации графа |
+| GET | `/api/export` | Export full graph data as JSON |
+| POST | `/api/import` | Import graph data from JSON export (MERGE by ID) |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
 
@@ -284,7 +286,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 |---|--------|--------|----------|
 | ~~5~~ | ~~Batch Ingestion~~ | ~~2ч~~ | ~~DONE~~ `POST /api/ingest/batch`, per-episode errors, Batch JSON tab in UI |
 | ~~6~~ | ~~Entity Explorer tab~~ | ~~2-3ч~~ | ~~DONE~~ Entities tab: table + type filter + name search + detail panel (relationships, events) |
-| 7 | Export / Import | 2ч | `GET /api/export` JSON dump, `POST /api/import` restore, кнопка Export в Stats |
+| ~~7~~ | ~~Export / Import~~ | ~~2ч~~ | ~~DONE~~ `GET /api/export`, `POST /api/import` (MERGE by ID), Export/Import UI в Stats tab |
 | 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |
 | ~~9~~ | ~~Docker Compose full stack~~ | ~~1ч~~ | ~~DONE~~ Dockerfile + api/ui services, healthchecks, env_file |
 
