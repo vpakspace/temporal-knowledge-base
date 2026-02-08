@@ -222,6 +222,44 @@ async def ingest_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/ingest/batch", dependencies=_auth)
+async def ingest_batch(episodes: list[IngestRequest]):
+    """Ingest multiple episodes in one request.
+
+    Processes sequentially. Returns per-episode results with errors.
+    """
+    pipeline: IngestionPipeline = _state["pipeline"]
+    results: list[dict] = []
+
+    for i, req in enumerate(episodes):
+        try:
+            ep_type = EpisodeType(req.episode_type)
+        except ValueError:
+            ep_type = EpisodeType.TEXT
+
+        try:
+            result = await pipeline.ingest_episode(
+                content=req.content,
+                source=req.source,
+                episode_type=ep_type,
+                reference_time=req.reference_time or datetime.now(UTC),
+                group_id=req.group_id,
+            )
+            results.append({"index": i, "success": True, "data": result})
+        except Exception as e:
+            logger.exception("Batch ingest failed for episode %d", i)
+            results.append({"index": i, "success": False, "error": str(e)})
+
+    succeeded = sum(1 for r in results if r["success"])
+    return {
+        "success": True,
+        "total": len(episodes),
+        "succeeded": succeeded,
+        "failed": len(episodes) - succeeded,
+        "results": results,
+    }
+
+
 @app.post("/api/search", dependencies=_auth)
 async def search(req: SearchRequest):
     """Search the temporal knowledge graph.

@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 107 unit + 30 integration = 137 total
+**Тесты**: 108 unit + 30 integration = 138 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -87,6 +87,7 @@ docker compose up -d
 |--------|------|----------|
 | POST | `/api/ingest` | Ingest episode через pipeline |
 | POST | `/api/ingest/file` | Upload & ingest document via Docling (PDF/DOCX/PPTX/XLSX/HTML) |
+| POST | `/api/ingest/batch` | Batch ingest (JSON array), per-episode error reporting |
 | POST | `/api/search` | Temporal-aware search (auto temporal hints) |
 | POST | `/api/ask` | Question + LLM answer (mirrors MCP `tkb_ask`) |
 | GET | `/api/timeline/{entity_id}` | Timeline сущности |
@@ -281,7 +282,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 
 | # | Задача | Усилие | Описание |
 |---|--------|--------|----------|
-| 5 | Batch Ingestion | 2ч | `POST /api/ingest/batch` (массив), `POST /api/ingest/directory`, progress bar в Streamlit |
+| ~~5~~ | ~~Batch Ingestion~~ | ~~2ч~~ | ~~DONE~~ `POST /api/ingest/batch`, per-episode errors, Batch JSON tab in UI |
 | ~~6~~ | ~~Entity Explorer tab~~ | ~~2-3ч~~ | ~~DONE~~ Entities tab: table + type filter + name search + detail panel (relationships, events) |
 | 7 | Export / Import | 2ч | `GET /api/export` JSON dump, `POST /api/import` restore, кнопка Export в Stats |
 | 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |

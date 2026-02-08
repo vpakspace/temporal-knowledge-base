@@ -102,6 +102,7 @@ class TestAuthEnabled:
             "/api/search",
             "/api/ask",
             "/api/stats",
+            "/api/ingest/batch",
             "/api/entities",
             "/api/entities/fake-id",
             "/api/graph",
@@ -110,7 +111,9 @@ class TestAuthEnabled:
         ],
     )
     def test_all_api_endpoints_protected(self, client: TestClient, path: str):
-        if path.startswith("/api/ingest") and "file" not in path:
+        if path == "/api/ingest/batch":
+            resp = client.post(path, json=[{"content": "x"}])
+        elif path.startswith("/api/ingest") and "file" not in path:
             resp = client.post(path, json={"content": "x"})
         elif path.startswith("/api/search") or path.startswith("/api/ask"):
             resp = client.post(path, json={"query": "x", "question": "x"})

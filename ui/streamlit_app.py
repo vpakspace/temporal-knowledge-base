@@ -118,13 +118,45 @@ with tab_ingest:
 
     input_method = st.radio(
         "Input method",
-        ["Paste text", "Upload file"],
+        ["Paste text", "Upload file", "Batch (JSON)"],
         horizontal=True,
     )
 
     content = ""
 
-    if input_method == "Paste text":
+    if input_method == "Batch (JSON)":
+        st.markdown(
+            "Paste a JSON array of episodes. Each item: "
+            '`{"content": "...", "source": "...", "episode_type": "text"}`'
+        )
+        batch_json = st.text_area(
+            "Batch JSON",
+            height=250,
+            placeholder='[{"content": "Fact 1", "source": "src1"}, {"content": "Fact 2", "source": "src2"}]',
+            key="batch_json",
+        )
+        if st.button("Ingest Batch", type="primary", disabled=not batch_json.strip()):
+            try:
+                episodes = json.loads(batch_json)
+                if not isinstance(episodes, list):
+                    st.error("JSON must be an array of objects")
+                else:
+                    progress = st.progress(0, text="Starting batch ingestion...")
+                    result = api_call("POST", "/api/ingest/batch", json=episodes)
+                    progress.progress(100, text="Done!")
+                    if result and result.get("success"):
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Total", result["total"])
+                        c2.metric("Succeeded", result["succeeded"])
+                        c3.metric("Failed", result["failed"])
+                        if result["failed"] > 0:
+                            for r in result["results"]:
+                                if not r["success"]:
+                                    st.error(f"Episode {r['index']}: {r['error']}")
+            except json.JSONDecodeError:
+                st.error("Invalid JSON")
+
+    elif input_method == "Paste text":
         col1, col2 = st.columns([3, 1])
         with col1:
             content = st.text_area(
