@@ -27,6 +27,7 @@ from api.auth import verify_api_key
 from core.config import get_settings
 from core.models import EpisodeType, IntentType
 from core.temporal_hints import extract_temporal_hint
+from core.webhooks import WebhookManager
 from generation.llm_client import LLMClient
 from generation.response_builder import ResponseBuilder
 from generation.temporal_verifier import TemporalVerifier
@@ -58,8 +59,11 @@ async def lifespan(app: FastAPI):
     graphiti = GraphitiClient(settings)
     await graphiti.connect()
 
+    webhook_manager = WebhookManager()
     entity_resolver = EntityResolver(neo4j, vector_store)
-    invalidation_agent = InvalidationAgent(neo4j, vector_store, llm, settings)
+    invalidation_agent = InvalidationAgent(
+        neo4j, vector_store, llm, settings, webhook_manager=webhook_manager
+    )
     verifier = TemporalVerifier(neo4j)
 
     pipeline = IngestionPipeline(
@@ -76,6 +80,7 @@ async def lifespan(app: FastAPI):
 
     _state["neo4j"] = neo4j
     _state["graphiti"] = graphiti
+    _state["webhooks"] = webhook_manager
     _state["pipeline"] = pipeline
     _state["query_engine"] = query_engine
     _state["response_builder"] = response_builder
@@ -101,6 +106,12 @@ _auth = [Depends(verify_api_key)]
 
 
 # --- Request/Response models ---
+
+
+class WebhookRequest(BaseModel):
+    url: str
+    name: str = ""
+    events: list[str] | None = None
 
 
 class IngestRequest(BaseModel):
@@ -423,6 +434,31 @@ async def get_contradictions():
         return {"success": True, "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/webhooks", dependencies=_auth)
+async def list_webhooks():
+    """List registered webhooks."""
+    wm: WebhookManager = _state["webhooks"]
+    return {"success": True, "data": wm.list_webhooks()}
+
+
+@app.post("/api/webhooks", dependencies=_auth)
+async def add_webhook(req: WebhookRequest):
+    """Register a webhook URL for event notifications."""
+    wm: WebhookManager = _state["webhooks"]
+    webhook = wm.add_webhook(url=req.url, events=req.events, name=req.name)
+    return {"success": True, "data": webhook}
+
+
+@app.delete("/api/webhooks", dependencies=_auth)
+async def remove_webhook(url: str):
+    """Remove a webhook by URL."""
+    wm: WebhookManager = _state["webhooks"]
+    removed = wm.remove_webhook(url)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return {"success": True}
 
 
 @app.get("/api/export", dependencies=_auth)

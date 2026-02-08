@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 113 unit + 30 integration = 143 total
+**Тесты**: 114 unit + 30 integration = 144 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -100,6 +100,9 @@ docker compose up -d
 | GET | `/api/contradictions` | Supersession chains, hotspots, invalidation log |
 | GET | `/api/export` | Export full graph data as JSON |
 | POST | `/api/import` | Import graph data from JSON export (MERGE by ID) |
+| GET | `/api/webhooks` | List registered webhooks |
+| POST | `/api/webhooks` | Register webhook URL |
+| DELETE | `/api/webhooks?url=` | Remove webhook |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
 
@@ -299,7 +302,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | # | Задача | Описание |
 |---|--------|----------|
 | ~~10~~ | ~~Community Detection~~ | ~~DONE~~ Graphiti `build_communities` + lightweight BFS clusters, `/api/communities`, Graph tab UI |
-| 11 | Webhook Notifications | Уведомления при contradictions |
+| ~~11~~ | ~~Webhook Notifications~~ | ~~DONE~~ `core/webhooks.py`, auto-fire on supersession, CRUD API, UI в Stats tab |
 | 12 | Multi-language Hints | Расширить temporal_hints.py |
 | 13 | Caching Layer | Кеш OpenAI вызовов (intent classification, response generation) |
 | 14 | Metrics / Monitoring | Prometheus или Phoenix MCP tracing |

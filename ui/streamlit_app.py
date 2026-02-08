@@ -709,3 +709,39 @@ with tab_stats:
                                 f"{counts.get('episodes', 0)} episodes, "
                                 f"{counts.get('relationships', 0)} relationships"
                             )
+
+    st.divider()
+
+    # --- Webhooks ---
+    st.subheader("Webhook Notifications")
+    st.caption("Get notified when facts are superseded (contradictions detected)")
+
+    # Show existing webhooks
+    wh_result = api_call("GET", "/api/webhooks")
+    if wh_result and wh_result.get("success"):
+        webhooks = wh_result["data"]
+        if webhooks:
+            for wh in webhooks:
+                col_info, col_del = st.columns([4, 1])
+                col_info.markdown(
+                    f"**{wh.get('name', wh['url'])}** — `{wh['url']}`\n"
+                    f"Events: {', '.join(wh.get('events', []))}"
+                )
+                if col_del.button("Remove", key=f"rm_{wh['url']}"):
+                    api_call("DELETE", f"/api/webhooks?url={wh['url']}")
+                    st.rerun()
+        else:
+            st.info("No webhooks configured.")
+
+    # Add new webhook
+    with st.expander("Add Webhook"):
+        wh_url = st.text_input("Webhook URL", placeholder="https://example.com/webhook")
+        wh_name = st.text_input("Name (optional)", placeholder="Slack notification")
+        if st.button("Register Webhook"):
+            if wh_url:
+                result = api_call("POST", "/api/webhooks", json={"url": wh_url, "name": wh_name})
+                if result and result.get("success"):
+                    st.success(f"Webhook registered: {wh_url}")
+                    st.rerun()
+            else:
+                st.warning("Please enter a webhook URL")

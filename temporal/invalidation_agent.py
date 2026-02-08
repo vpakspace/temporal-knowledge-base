@@ -20,6 +20,7 @@ from core.models import (
     InvalidationResult,
     TemporalEvent,
 )
+from core.webhooks import WebhookManager
 from generation.llm_client import LLMClient
 from storage.neo4j_client import Neo4jClient
 from storage.vector_store import VectorStore
@@ -39,11 +40,13 @@ class InvalidationAgent:
         vector_store: VectorStore,
         llm: LLMClient,
         settings: AppSettings,
+        webhook_manager: WebhookManager | None = None,
     ) -> None:
         self._neo4j = neo4j
         self._vectors = vector_store
         self._llm = llm
         self._similarity_threshold = settings.invalidation_similarity_threshold
+        self._webhooks = webhook_manager
 
     async def process_new_events(self, new_events: list[TemporalEvent]) -> InvalidationResult:
         """Process new events and invalidate contradicted existing ones."""
@@ -68,6 +71,17 @@ class InvalidationAgent:
                         new_event.statement[:50],
                     )
                     max_severity = DriftSeverity.CRITICAL
+                    # Fire webhook
+                    if self._webhooks:
+                        try:
+                            await self._webhooks.notify_supersession(
+                                old_id=candidate.existing_event.id,
+                                old_statement=candidate.existing_event.statement,
+                                new_id=new_event.id,
+                                new_statement=new_event.statement,
+                            )
+                        except Exception as e:
+                            logger.warning("Webhook notification failed: %s", e)
 
         return InvalidationResult(
             invalidated_events=invalidated_ids,

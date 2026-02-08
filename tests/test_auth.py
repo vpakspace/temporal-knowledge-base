@@ -109,6 +109,7 @@ class TestAuthEnabled:
             "/api/communities",
             "/api/communities/build",
             "/api/contradictions",
+            "/api/webhooks",
             "/api/export",
             "/api/import",
             "/api/timeline/fake-id",
