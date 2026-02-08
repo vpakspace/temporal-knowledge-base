@@ -20,9 +20,10 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from api.auth import verify_api_key
 from core.config import get_settings
 from core.models import EpisodeType, IntentType
 from core.temporal_hints import extract_temporal_hint
@@ -95,6 +96,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# All /api/* endpoints require API key (when APP_API_KEY is set)
+_auth = [Depends(verify_api_key)]
+
 
 # --- Request/Response models ---
 
@@ -131,7 +135,7 @@ async def health():
     return {"status": "ok", "service": "temporal-knowledge-base"}
 
 
-@app.post("/api/ingest")
+@app.post("/api/ingest", dependencies=_auth)
 async def ingest_episode(req: IngestRequest):
     """Ingest an episode through the full pipeline."""
     pipeline: IngestionPipeline = _state["pipeline"]
@@ -156,7 +160,7 @@ async def ingest_episode(req: IngestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/ingest/file")
+@app.post("/api/ingest/file", dependencies=_auth)
 async def ingest_file(
     file: UploadFile = File(...),
     source: str = Form(None),
@@ -218,7 +222,7 @@ async def ingest_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/search")
+@app.post("/api/search", dependencies=_auth)
 async def search(req: SearchRequest):
     """Search the temporal knowledge graph.
 
@@ -257,7 +261,7 @@ async def search(req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/ask")
+@app.post("/api/ask", dependencies=_auth)
 async def ask_question(req: AskRequest):
     """Ask a question with auto temporal extraction and LLM-generated answer.
 
@@ -286,7 +290,7 @@ async def ask_question(req: AskRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/timeline/{entity_id}")
+@app.get("/api/timeline/{entity_id}", dependencies=_auth)
 async def get_timeline(entity_id: str):
     """Get full timeline for an entity."""
     query_engine: QueryEngine = _state["query_engine"]
@@ -297,7 +301,7 @@ async def get_timeline(entity_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/evolution/{event_id}")
+@app.get("/api/evolution/{event_id}", dependencies=_auth)
 async def get_evolution(event_id: str):
     """Get fact evolution (supersession chain)."""
     query_engine: QueryEngine = _state["query_engine"]
@@ -308,7 +312,7 @@ async def get_evolution(event_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/entities")
+@app.get("/api/entities", dependencies=_auth)
 async def list_entities():
     """List all entities in the knowledge graph."""
     neo4j: Neo4jClient = _state["neo4j"]
@@ -319,7 +323,7 @@ async def list_entities():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/graph")
+@app.get("/api/graph", dependencies=_auth)
 async def get_graph():
     """Get graph data (nodes + edges) for visualization."""
     neo4j: Neo4jClient = _state["neo4j"]
@@ -330,7 +334,7 @@ async def get_graph():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=_auth)
 async def get_stats():
     """Get graph statistics."""
     neo4j: Neo4jClient = _state["neo4j"]

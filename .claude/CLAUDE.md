@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 90 unit + 30 integration = 120 total
+**Тесты**: 106 unit + 30 integration = 136 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -102,6 +102,7 @@ docker compose up -d
 - `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` — Neo4j подключение
 - `OPENAI_API_KEY` — для embeddings и LLM extraction
 - `LLM_MODEL=gpt-4o-mini`, `EMBEDDING_MODEL=text-embedding-3-small`
+- `APP_API_KEY` — API authentication (empty = auth disabled)
 
 ## Graphiti API
 
@@ -271,8 +272,8 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 |---|--------|--------|----------|
 | ~~1~~ | ~~Graph Visualization в UI~~ | ~~1-2ч~~ | ~~DONE~~ Entity autocomplete в Timeline tab, Graph tab (`streamlit-agraph`) |
 | ~~2~~ | ~~Рефакторинг дубликата search/ask~~ | ~~30мин~~ | ~~DONE~~ `QueryEngine.search_with_fallback()` — дубликат из 3 мест устранён |
-| 3 | CI/CD Pipeline | 30мин | `.github/workflows/ci.yml` — pytest (unit), black, isort, badge в README |
-| 4 | API Authentication | 1ч | `X-API-Key` header middleware, настройка через `.env` |
+| ~~3~~ | ~~CI/CD Pipeline~~ | ~~30мин~~ | ~~DONE~~ `.github/workflows/ci.yml` — pytest + black + isort |
+| ~~4~~ | ~~API Authentication~~ | ~~1ч~~ | ~~DONE~~ `api/auth.py`, `X-API-Key` header, `APP_API_KEY` env var |
 
 ### Средний приоритет
 

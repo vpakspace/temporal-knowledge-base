@@ -28,6 +28,9 @@ class AppSettings(BaseSettings):
     neo4j: Neo4jSettings = Neo4jSettings()
     openai: OpenAISettings = OpenAISettings()
 
+    # API authentication (empty = auth disabled)
+    api_key: str = ""
+
     # Temporal settings
     invalidation_similarity_threshold: float = 0.5
     default_search_limit: int = 10

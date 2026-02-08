@@ -10,6 +10,7 @@ Tabs:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ if _project_root not in sys.path:
 from ingestion.document_loader import DoclingLoader
 
 API_BASE = "http://localhost:8000"
+API_KEY = os.environ.get("APP_API_KEY", "")
 
 MAX_FILE_SIZE_MB = 10
 _doc_loader = DoclingLoader()
@@ -42,8 +44,9 @@ st.caption("Graphiti + GraphOS | Bi-temporal Knowledge Graph")
 def api_call(method: str, path: str, **kwargs):
     """Make API call to FastAPI backend."""
     url = f"{API_BASE}{path}"
+    headers = {"X-API-Key": API_KEY} if API_KEY else {}
     try:
-        with httpx.Client(timeout=60) as client:
+        with httpx.Client(timeout=60, headers=headers) as client:
             if method == "GET":
                 resp = client.get(url)
             else:
