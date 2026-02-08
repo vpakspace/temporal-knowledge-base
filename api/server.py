@@ -11,6 +11,7 @@ Endpoints:
 - GET  /api/graph      — Get graph data for visualization
 - GET  /api/cache/stats — Cache hit/miss statistics
 - POST /api/cache/clear — Clear all caches
+- GET  /api/metrics    — Request/pipeline metrics
 - GET  /api/stats      — Graph statistics
 - GET  /health         — Health check
 """
@@ -18,15 +19,17 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from api.auth import verify_api_key
 from core.config import get_settings
+from core.metrics import metrics
 from core.models import EpisodeType, IntentType
 from core.temporal_hints import extract_temporal_hint
 from core.webhooks import WebhookManager
@@ -104,6 +107,25 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Track request count, latency, and errors per endpoint."""
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = (time.monotonic() - start) * 1000
+
+    path = request.url.path
+    metrics.inc("requests_total")
+    metrics.timing(f"latency:{path}", duration_ms)
+
+    if response.status_code >= 400:
+        metrics.inc("errors_total")
+        metrics.inc(f"errors:{response.status_code}")
+
+    return response
+
 
 # All /api/* endpoints require API key (when APP_API_KEY is set)
 _auth = [Depends(verify_api_key)]
@@ -486,6 +508,12 @@ async def import_graph(data: dict):
     except Exception as e:
         logger.exception("Import failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/metrics", dependencies=_auth)
+async def get_metrics():
+    """Get request/pipeline metrics (counters, latencies, uptime)."""
+    return {"success": True, "data": metrics.snapshot()}
 
 
 @app.get("/api/cache/stats", dependencies=_auth)

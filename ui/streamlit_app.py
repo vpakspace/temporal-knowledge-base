@@ -695,6 +695,61 @@ with tab_stats:
 
     st.divider()
 
+    # --- Metrics ---
+    st.subheader("API Metrics")
+    st.caption("Request counts, latencies, pipeline throughput (resets on API restart)")
+
+    if st.button("Refresh Metrics"):
+        result = api_call("GET", "/api/metrics")
+        if result and result.get("success"):
+            mdata = result["data"]
+            # Uptime and request counters
+            m1, m2, m3 = st.columns(3)
+            uptime_s = mdata.get("uptime_seconds", 0)
+            hours = int(uptime_s // 3600)
+            mins = int((uptime_s % 3600) // 60)
+            m1.metric("Uptime", f"{hours}h {mins}m")
+
+            counters = mdata.get("counters", {})
+            m2.metric("Total Requests", counters.get("requests_total", 0))
+            m3.metric("Errors", counters.get("errors_total", 0))
+
+            # Pipeline counters
+            if counters.get("ingest_total", 0) > 0:
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Ingestions", counters.get("ingest_total", 0))
+                p2.metric("Entities Extracted", counters.get("entities_extracted_total", 0))
+                p3.metric("Events Extracted", counters.get("events_extracted_total", 0))
+                p4.metric("Invalidated", counters.get("invalidated_total", 0))
+
+            # Search counters
+            if counters.get("search_total", 0) > 0:
+                s1, s2 = st.columns(2)
+                s1.metric("Searches", counters.get("search_total", 0))
+                s2.metric("Results Returned", counters.get("search_results_total", 0))
+
+            # Latency stats
+            timings = mdata.get("timings", {})
+            if timings:
+                st.markdown("**Latency (ms)**")
+                latency_rows = []
+                for name, stats in sorted(timings.items()):
+                    if stats:
+                        latency_rows.append(
+                            {
+                                "Endpoint": name,
+                                "Count": stats.get("count", 0),
+                                "Avg": stats.get("avg_ms", 0),
+                                "P50": stats.get("p50_ms", 0),
+                                "P95": stats.get("p95_ms", 0),
+                                "Max": stats.get("max_ms", 0),
+                            }
+                        )
+                if latency_rows:
+                    st.dataframe(latency_rows, use_container_width=True)
+
+    st.divider()
+
     # --- Export ---
     st.subheader("Export / Import")
 

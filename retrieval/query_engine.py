@@ -7,9 +7,11 @@ Query Decomposition) and Layers 8-11 (Retrieval).
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from typing import Any
 
+from core.metrics import metrics
 from core.models import (
     IntentType,
     SearchQuery,
@@ -47,6 +49,9 @@ class QueryEngine:
         4. Execute temporal layer search if needed
         5. Merge and rerank results
         """
+        search_start = time.monotonic()
+        metrics.inc("search_total")
+
         # Step 1: Intent classification
         if query.intent == IntentType.HYBRID:
             detected = await self._llm.classify_intent(query.query)
@@ -97,6 +102,9 @@ class QueryEngine:
                 unique_results.append(r)
 
         final = unique_results[: query.limit]
+
+        metrics.timing("search_duration", (time.monotonic() - search_start) * 1000)
+        metrics.inc("search_results_total", len(final))
 
         return SearchResponse(
             query=query,

@@ -11,11 +11,13 @@ Pipeline stages:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
 from core.config import AppSettings
 from core.exceptions import EpisodeProcessingError
+from core.metrics import metrics
 from core.models import (
     Entity,
     Episode,
@@ -74,6 +76,8 @@ class IngestionPipeline:
 
         Returns summary of what was extracted and stored.
         """
+        pipeline_start = time.monotonic()
+
         if reference_time is None:
             reference_time = datetime.now(UTC)
 
@@ -144,6 +148,13 @@ class IngestionPipeline:
 
         # Store episode metadata
         await self._neo4j.create_episode(episode)
+
+        duration_ms = (time.monotonic() - pipeline_start) * 1000
+        metrics.inc("ingest_total")
+        metrics.inc("entities_extracted_total", len(all_entities))
+        metrics.inc("events_extracted_total", len(all_events))
+        metrics.inc("invalidated_total", len(invalidation_result.invalidated_events))
+        metrics.timing("ingest_duration", duration_ms)
 
         summary = {
             "episode_id": episode.id,

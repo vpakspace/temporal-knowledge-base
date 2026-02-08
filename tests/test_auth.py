@@ -110,6 +110,7 @@ class TestAuthEnabled:
             "/api/communities/build",
             "/api/contradictions",
             "/api/webhooks",
+            "/api/metrics",
             "/api/cache/stats",
             "/api/cache/clear",
             "/api/export",

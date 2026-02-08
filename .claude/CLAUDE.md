@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 116 unit + 30 integration = 146 total
+**Тесты**: 117 unit + 30 integration = 147 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -103,6 +103,7 @@ docker compose up -d
 | GET | `/api/webhooks` | List registered webhooks |
 | POST | `/api/webhooks` | Register webhook URL |
 | DELETE | `/api/webhooks?url=` | Remove webhook |
+| GET | `/api/metrics` | Request/pipeline metrics (counters, latencies, uptime) |
 | GET | `/api/cache/stats` | Cache hit/miss statistics (LLM + embeddings) |
 | POST | `/api/cache/clear` | Clear all caches |
 | GET | `/api/stats` | Статистика графа |
@@ -307,7 +308,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | ~~11~~ | ~~Webhook Notifications~~ | ~~DONE~~ `core/webhooks.py`, auto-fire on supersession, CRUD API, UI в Stats tab |
 | 12 | Multi-language Hints | Расширить temporal_hints.py |
 | ~~13~~ | ~~Caching Layer~~ | ~~DONE~~ TTLCache for LLM intent + embeddings, `/api/cache/stats`, UI stats |
-| 14 | Metrics / Monitoring | Prometheus или Phoenix MCP tracing |
+| ~~14~~ | ~~Metrics / Monitoring~~ | ~~DONE~~ `core/metrics.py`, middleware latency tracking, pipeline/search counters, `/api/metrics`, UI |
 
 ### Рекомендуемый порядок
 `~~#2~~ → ~~#1~~ → #3 → #4 → #6 → #9 → #5 → #7`
