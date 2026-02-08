@@ -8,3 +8,5 @@ htmlcov/
 dist/
 build/
 .venv/
+*.pdf
+*.png
