@@ -387,6 +387,33 @@ async def get_graph():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/communities", dependencies=_auth)
+async def get_communities():
+    """Get existing Community nodes (built by Graphiti) or lightweight clusters."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        communities = await neo4j.get_communities()
+        if communities:
+            return {"success": True, "source": "graphiti", "data": communities}
+        # Fallback to lightweight connected components
+        clusters = await neo4j.get_entity_clusters()
+        return {"success": True, "source": "clusters", "data": clusters}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/communities/build", dependencies=_auth)
+async def build_communities():
+    """Build communities using Graphiti label propagation + LLM summarization."""
+    graphiti: GraphitiClient = _state["graphiti"]
+    try:
+        result = await graphiti.build_communities()
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.exception("Community build failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/contradictions", dependencies=_auth)
 async def get_contradictions():
     """Get supersession chains, entity hotspots, and invalidation log."""

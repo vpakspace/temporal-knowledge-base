@@ -106,6 +106,8 @@ class TestAuthEnabled:
             "/api/entities",
             "/api/entities/fake-id",
             "/api/graph",
+            "/api/communities",
+            "/api/communities/build",
             "/api/contradictions",
             "/api/export",
             "/api/import",
@@ -118,6 +120,8 @@ class TestAuthEnabled:
             resp = client.post(path, json=[{"content": "x"}])
         elif path == "/api/import":
             resp = client.post(path, json={"version": "1.0"})
+        elif path == "/api/communities/build":
+            resp = client.post(path)
         elif path.startswith("/api/ingest") and "file" not in path:
             resp = client.post(path, json={"content": "x"})
         elif path.startswith("/api/search") or path.startswith("/api/ask"):

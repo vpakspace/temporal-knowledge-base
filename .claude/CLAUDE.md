@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 111 unit + 30 integration = 141 total
+**Тесты**: 113 unit + 30 integration = 143 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -95,6 +95,8 @@ docker compose up -d
 | GET | `/api/entities` | Список всех entities (для autocomplete) |
 | GET | `/api/entities/{entity_id}` | Детали entity (relationships, event counts) |
 | GET | `/api/graph` | Nodes + edges для визуализации графа |
+| GET | `/api/communities` | Community nodes or lightweight clusters |
+| POST | `/api/communities/build` | Build communities via Graphiti (LLM summarization) |
 | GET | `/api/contradictions` | Supersession chains, hotspots, invalidation log |
 | GET | `/api/export` | Export full graph data as JSON |
 | POST | `/api/import` | Import graph data from JSON export (MERGE by ID) |
@@ -269,7 +271,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 - [x] Document metadata enrichment ✅
 - [x] Docling installed and tested (PDF with table + chart) ✅ `4a6ecdc`
 - [x] README.md with installation guide ✅ `b15fffd`
-- [ ] Community detection (Graphiti `build_communities`)
+- [x] Community detection (Graphiti `build_communities` + lightweight clusters) ✅
 
 ## План улучшений (2026-02-08)
 
@@ -296,7 +298,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 
 | # | Задача | Описание |
 |---|--------|----------|
-| 10 | Community Detection | Graphiti `build_communities` для кластеризации |
+| ~~10~~ | ~~Community Detection~~ | ~~DONE~~ Graphiti `build_communities` + lightweight BFS clusters, `/api/communities`, Graph tab UI |
 | 11 | Webhook Notifications | Уведомления при contradictions |
 | 12 | Multi-language Hints | Расширить temporal_hints.py |
 | 13 | Caching Layer | Кеш OpenAI вызовов (intent classification, response generation) |

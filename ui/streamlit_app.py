@@ -503,6 +503,57 @@ with tab_graph:
                                 unsafe_allow_html=True,
                             )
 
+    # --- Communities section ---
+    st.divider()
+    st.subheader("Communities / Clusters")
+
+    col_detect, col_build = st.columns(2)
+
+    with col_detect:
+        if st.button("Detect Clusters"):
+            with st.spinner("Detecting communities..."):
+                result = api_call("GET", "/api/communities")
+                if result and result.get("success"):
+                    source = result.get("source", "clusters")
+                    communities = result["data"]
+
+                    if not communities:
+                        st.info("No clusters found. Ingest more data to form connections.")
+                    else:
+                        st.caption(
+                            f"Source: {'Graphiti Communities' if source == 'graphiti' else 'Connected Components'} "
+                            f"| {len(communities)} clusters"
+                        )
+                        for comm in communities:
+                            members = comm.get("members", [])
+                            label = (
+                                comm.get("name")
+                                or comm.get("summary")
+                                or f"Cluster {comm.get('cluster_id', '?')}"
+                            )
+                            size = comm.get("member_count") or comm.get("size", len(members))
+                            with st.expander(f"{label} ({size} members)", expanded=False):
+                                if comm.get("summary"):
+                                    st.markdown(f"*{comm['summary']}*")
+                                for m in members:
+                                    st.markdown(
+                                        f"- **{m.get('name', '?')}** ({m.get('entity_type', '?')})"
+                                    )
+
+    with col_build:
+        st.caption("Build Graphiti communities (uses LLM for summarization)")
+        if st.button("Build Communities (LLM)"):
+            with st.spinner("Building communities via Graphiti (may take a minute)..."):
+                result = api_call("POST", "/api/communities/build")
+                if result and result.get("success"):
+                    data = result["data"]
+                    st.success(
+                        f"Built {data.get('communities', 0)} communities "
+                        f"with {data.get('edges', 0)} membership edges"
+                    )
+                    for d in data.get("details", []):
+                        st.markdown(f"- **{d.get('name', '?')}**: {d.get('summary', '')[:200]}")
+
 
 # --- Tab 6: Contradictions ---
 with tab_contra:

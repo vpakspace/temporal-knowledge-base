@@ -422,6 +422,73 @@ class Neo4jClient:
 
         return {"nodes": nodes, "edges": edges}
 
+    # --- Communities ---
+
+    async def get_communities(self) -> list[dict[str, Any]]:
+        """Get existing Community nodes with their members."""
+        query = """
+        MATCH (c:Community)
+        OPTIONAL MATCH (c)-[:HAS_MEMBER]->(e:Entity)
+        WITH c, collect({id: e.id, name: e.name, entity_type: e.entity_type}) AS members
+        RETURN c.uuid AS id, c.name AS name, c.summary AS summary,
+               size(members) AS member_count, members
+        ORDER BY size(members) DESC
+        """
+        async with self.session() as session:
+            result = await session.run(query)
+            records = [dict(r) async for r in result]
+            # Filter out null members from OPTIONAL MATCH
+            for rec in records:
+                rec["members"] = [m for m in rec.get("members", []) if m.get("id")]
+            return records
+
+    async def get_entity_clusters(self) -> list[dict[str, Any]]:
+        """Lightweight community detection via connected components (no LLM).
+
+        Groups entities by RELATES_TO connectivity using BFS traversal.
+        """
+        query = """
+        MATCH (e:Entity)
+        OPTIONAL MATCH path = (e)-[:RELATES_TO*1..5]-(connected:Entity)
+        WITH e, collect(DISTINCT connected) AS neighbors
+        RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
+               [n IN neighbors | n.id] AS connected_ids
+        """
+        async with self.session() as session:
+            result = await session.run(query)
+            nodes = [dict(r) async for r in result]
+
+        # BFS to find connected components
+        adjacency: dict[str, set[str]] = {}
+        node_map: dict[str, dict] = {}
+        for n in nodes:
+            nid = n["id"]
+            node_map[nid] = {"id": nid, "name": n["name"], "entity_type": n["entity_type"]}
+            adjacency[nid] = set(n.get("connected_ids", []))
+
+        visited: set[str] = set()
+        clusters: list[list[dict]] = []
+        for nid in adjacency:
+            if nid in visited:
+                continue
+            # BFS
+            component: list[str] = []
+            queue = [nid]
+            while queue:
+                curr = queue.pop(0)
+                if curr in visited:
+                    continue
+                visited.add(curr)
+                component.append(curr)
+                for neighbor in adjacency.get(curr, []):
+                    if neighbor not in visited:
+                        queue.append(neighbor)
+            clusters.append([node_map[c] for c in component if c in node_map])
+
+        # Sort by size descending, return with cluster_id
+        clusters.sort(key=len, reverse=True)
+        return [{"cluster_id": i, "size": len(c), "members": c} for i, c in enumerate(clusters)]
+
     # --- Contradictions ---
 
     async def get_contradictions(self) -> dict[str, Any]:

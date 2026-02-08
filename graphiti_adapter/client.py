@@ -218,3 +218,20 @@ class GraphitiClient:
             logger.info("Episode %s removed", episode_uuid)
         except Exception as e:
             raise EpisodeProcessingError(f"Failed to remove episode {episode_uuid}: {e}") from e
+
+    async def build_communities(self, group_ids: list[str] | None = None) -> dict:
+        """Build communities using Graphiti's label propagation + LLM summarization.
+
+        Creates CommunityNode + HAS_MEMBER edges in Neo4j.
+        Requires LLM calls for summarization.
+        """
+        try:
+            nodes, edges = await self.graphiti.build_communities(group_ids=group_ids)
+            logger.info("Built %d communities with %d edges", len(nodes), len(edges))
+            return {
+                "communities": len(nodes),
+                "edges": len(edges),
+                "details": [{"name": n.name, "summary": n.summary, "uuid": n.uuid} for n in nodes],
+            }
+        except Exception as e:
+            raise EpisodeProcessingError(f"Community build failed: {e}") from e
