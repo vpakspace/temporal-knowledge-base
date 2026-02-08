@@ -3,6 +3,7 @@
 Endpoints:
 - POST /api/ingest     — Ingest an episode
 - POST /api/search     — Search the knowledge graph
+- POST /api/ask        — Ask question with auto temporal extraction + LLM answer
 - GET  /api/timeline/{entity_id} — Get entity timeline
 - GET  /api/evolution/{event_id} — Get fact evolution chain
 - GET  /api/stats      — Graph statistics
@@ -17,7 +18,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from core.config import get_settings
 from generation.llm_client import LLMClient
@@ -30,7 +31,8 @@ from storage.neo4j_client import Neo4jClient
 from storage.vector_store import VectorStore
 from temporal.invalidation_agent import InvalidationAgent
 from temporal.resolution import EntityResolver
-from core.models import EpisodeType, IntentType, SearchQuery
+from core.models import EpisodeType, IntentType, SearchQuery, SearchResponse, SearchResult
+from core.temporal_hints import extract_temporal_hint
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +112,11 @@ class SearchRequest(BaseModel):
     include_timeline: bool = False
 
 
+class AskRequest(BaseModel):
+    question: str
+    include_timeline: bool = False
+
+
 # --- Endpoints ---
 
 @app.get("/health")
@@ -144,7 +151,12 @@ async def ingest_episode(req: IngestRequest):
 
 @app.post("/api/search")
 async def search(req: SearchRequest):
-    """Search the temporal knowledge graph."""
+    """Search the temporal knowledge graph.
+
+    Automatically extracts temporal references from the query
+    (e.g. '2023', 'в январе 2024') and uses them as point-in-time
+    filters when no explicit point_in_time is provided.
+    """
     query_engine: QueryEngine = _state["query_engine"]
     response_builder: ResponseBuilder = _state["response_builder"]
 
@@ -153,10 +165,15 @@ async def search(req: SearchRequest):
     except ValueError:
         intent = IntentType.HYBRID
 
+    # Auto-extract temporal hint if no explicit point_in_time provided
+    point_in_time = req.point_in_time
+    if point_in_time is None:
+        point_in_time = extract_temporal_hint(req.query)
+
     search_query = SearchQuery(
         query=req.query,
         intent=intent,
-        point_in_time=req.point_in_time,
+        point_in_time=point_in_time,
         time_range_start=req.time_range_start,
         time_range_end=req.time_range_end,
         entity_types=req.entity_types,
@@ -165,6 +182,35 @@ async def search(req: SearchRequest):
 
     try:
         search_response = await query_engine.search(search_query)
+
+        # Broad search fallback when temporal hint detected but few results
+        if point_in_time and len(search_response.results) < 5:
+            broad_query = SearchQuery(
+                query=req.query,
+                intent=IntentType.STRUCTURAL,
+                limit=10,
+            )
+            broad_response = await query_engine.search(broad_query)
+
+            seen_ids = {r.id for r in search_response.results}
+            extra: list[SearchResult] = []
+            for r in broad_response.results:
+                if r.id not in seen_ids:
+                    if r.temporal and r.temporal.valid_at and point_in_time:
+                        if r.temporal.valid_at <= point_in_time:
+                            extra.append(r)
+                            seen_ids.add(r.id)
+                    else:
+                        extra.append(r)
+                        seen_ids.add(r.id)
+
+            merged = search_response.results + extra
+            search_response = SearchResponse(
+                query=search_query,
+                results=merged[:15],
+                total_count=len(merged),
+            )
+
         result = await response_builder.build_response(
             query=req.query,
             search_response=search_response,
@@ -172,6 +218,67 @@ async def search(req: SearchRequest):
         )
         return {"success": True, "data": result}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ask")
+async def ask_question(req: AskRequest):
+    """Ask a question with auto temporal extraction and LLM-generated answer.
+
+    Same logic as MCP tkb_ask: extracts temporal hints from the question,
+    performs hybrid + broad fallback search, builds LLM response.
+    """
+    query_engine: QueryEngine = _state["query_engine"]
+    response_builder: ResponseBuilder = _state["response_builder"]
+
+    temporal_hint = extract_temporal_hint(req.question)
+
+    try:
+        # Primary search: hybrid with temporal hint
+        search_query = SearchQuery(
+            query=req.question,
+            intent=IntentType.HYBRID,
+            point_in_time=temporal_hint,
+            limit=15,
+        )
+        search_response = await query_engine.search(search_query)
+
+        # Broad search fallback when temporal hint detected but few results
+        if temporal_hint and len(search_response.results) < 5:
+            broad_query = SearchQuery(
+                query=req.question,
+                intent=IntentType.STRUCTURAL,
+                limit=10,
+            )
+            broad_response = await query_engine.search(broad_query)
+
+            seen_ids = {r.id for r in search_response.results}
+            extra: list[SearchResult] = []
+            for r in broad_response.results:
+                if r.id not in seen_ids:
+                    if r.temporal and r.temporal.valid_at and temporal_hint:
+                        if r.temporal.valid_at <= temporal_hint:
+                            extra.append(r)
+                            seen_ids.add(r.id)
+                    else:
+                        extra.append(r)
+                        seen_ids.add(r.id)
+
+            merged = search_response.results + extra
+            search_response = SearchResponse(
+                query=search_query,
+                results=merged[:15],
+                total_count=len(merged),
+            )
+
+        result = await response_builder.build_response(
+            query=req.question,
+            search_response=search_response,
+            include_timeline=req.include_timeline,
+        )
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.exception("Ask failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 

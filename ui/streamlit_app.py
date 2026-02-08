@@ -1,7 +1,7 @@
 """Streamlit UI for Temporal Knowledge Base.
 
 Tabs:
-1. Ingest  — Add episodes (text, JSON, documents)
+1. Ingest  — Add episodes (text, JSON, documents, file upload)
 2. Search  — Temporal-aware search with intent classification
 3. Timeline — Entity timelines and fact evolution
 4. Stats   — Graph statistics and overview
@@ -9,10 +9,14 @@ Tabs:
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import streamlit as st
 
 API_BASE = "http://localhost:8000"
+
+MAX_FILE_SIZE_MB = 10
 
 st.set_page_config(
     page_title="Temporal Knowledge Base",
@@ -43,6 +47,45 @@ def api_call(method: str, path: str, **kwargs):
         return None
 
 
+def extract_text_from_file(uploaded_file) -> str | None:
+    """Extract text content from uploaded file."""
+    name = uploaded_file.name.lower()
+    raw = uploaded_file.read()
+
+    if name.endswith(".txt") or name.endswith(".md"):
+        return raw.decode("utf-8", errors="replace")
+
+    if name.endswith(".json"):
+        try:
+            data = json.loads(raw.decode("utf-8"))
+            return json.dumps(data, ensure_ascii=False, indent=2)
+        except json.JSONDecodeError:
+            st.error("Invalid JSON file")
+            return None
+
+    if name.endswith(".pdf"):
+        try:
+            import pypdf
+            from io import BytesIO
+
+            reader = pypdf.PdfReader(BytesIO(raw))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n\n".join(pages).strip()
+            if not text:
+                st.warning("PDF has no extractable text (may be image-based)")
+                return None
+            return text
+        except ImportError:
+            st.error("pypdf not installed. Run: pip install pypdf")
+            return None
+        except Exception as e:
+            st.error(f"PDF extraction failed: {e}")
+            return None
+
+    st.error(f"Unsupported file type: {name}")
+    return None
+
+
 # --- Tabs ---
 tab_ingest, tab_search, tab_timeline, tab_stats = st.tabs(
     ["Ingest", "Search", "Timeline", "Stats"]
@@ -52,17 +95,69 @@ tab_ingest, tab_search, tab_timeline, tab_stats = st.tabs(
 with tab_ingest:
     st.header("Ingest Episode")
 
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        content = st.text_area(
-            "Content",
-            height=200,
-            placeholder="Paste text, JSON, or document content...",
-        )
-    with col2:
-        source = st.text_input("Source", value="manual")
-        episode_type = st.selectbox("Type", ["text", "json", "chat", "document"])
-        group_id = st.text_input("Group ID (optional)", value="")
+    input_method = st.radio(
+        "Input method",
+        ["Paste text", "Upload file"],
+        horizontal=True,
+    )
+
+    content = ""
+
+    if input_method == "Paste text":
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            content = st.text_area(
+                "Content",
+                height=200,
+                placeholder="Paste text, JSON, or document content...",
+            )
+        with col2:
+            source = st.text_input("Source", value="manual")
+            episode_type = st.selectbox(
+                "Type", ["text", "json", "chat", "document"]
+            )
+            group_id = st.text_input("Group ID (optional)", value="")
+    else:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            uploaded = st.file_uploader(
+                "Upload file",
+                type=["txt", "md", "json", "pdf"],
+                help=f"Supported: TXT, MD, JSON, PDF (max {MAX_FILE_SIZE_MB} MB)",
+            )
+            if uploaded is not None:
+                if uploaded.size > MAX_FILE_SIZE_MB * 1024 * 1024:
+                    st.error(
+                        f"File too large ({uploaded.size / 1024 / 1024:.1f} MB). "
+                        f"Max: {MAX_FILE_SIZE_MB} MB"
+                    )
+                else:
+                    extracted = extract_text_from_file(uploaded)
+                    if extracted:
+                        content = extracted
+                        st.success(
+                            f"Extracted {len(content):,} characters from {uploaded.name}"
+                        )
+                        with st.expander("Preview content"):
+                            st.text(content[:2000] + ("..." if len(content) > 2000 else ""))
+        with col2:
+            source = st.text_input(
+                "Source",
+                value=uploaded.name if uploaded else "file_upload",
+            )
+            # Auto-detect type from extension
+            default_type = "text"
+            if uploaded and uploaded.name.lower().endswith(".json"):
+                default_type = "json"
+            elif uploaded and uploaded.name.lower().endswith(".pdf"):
+                default_type = "document"
+            type_options = ["text", "json", "chat", "document"]
+            episode_type = st.selectbox(
+                "Type",
+                type_options,
+                index=type_options.index(default_type),
+            )
+            group_id = st.text_input("Group ID (optional)", value="")
 
     if st.button("Ingest", type="primary", disabled=not content):
         with st.spinner("Processing episode..."):
@@ -103,11 +198,9 @@ with tab_search:
         with st.spinner("Searching..."):
             result = api_call(
                 "POST",
-                "/api/search",
+                "/api/ask",
                 json={
-                    "query": query,
-                    "intent": intent,
-                    "limit": limit,
+                    "question": query,
                     "include_timeline": include_timeline,
                 },
             )
