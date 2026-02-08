@@ -306,7 +306,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 |---|--------|----------|
 | ~~10~~ | ~~Community Detection~~ | ~~DONE~~ Graphiti `build_communities` + lightweight BFS clusters, `/api/communities`, Graph tab UI |
 | ~~11~~ | ~~Webhook Notifications~~ | ~~DONE~~ `core/webhooks.py`, auto-fire on supersession, CRUD API, UI в Stats tab |
-| 12 | Multi-language Hints | Расширить temporal_hints.py |
+| ~~12~~ | ~~Multi-language Hints~~ | ~~SKIP~~ Английский + русский уже поддерживаются в `core/temporal_hints.py` |
 | ~~13~~ | ~~Caching Layer~~ | ~~DONE~~ TTLCache for LLM intent + embeddings, `/api/cache/stats`, UI stats |
 | ~~14~~ | ~~Metrics / Monitoring~~ | ~~DONE~~ `core/metrics.py`, middleware latency tracking, pipeline/search counters, `/api/metrics`, UI |
 
