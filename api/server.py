@@ -2,10 +2,13 @@
 
 Endpoints:
 - POST /api/ingest     — Ingest an episode
+- POST /api/ingest/file — Upload & ingest document via Docling
 - POST /api/search     — Search the knowledge graph
 - POST /api/ask        — Ask question with auto temporal extraction + LLM answer
 - GET  /api/timeline/{entity_id} — Get entity timeline
 - GET  /api/evolution/{event_id} — Get fact evolution chain
+- GET  /api/entities   — List all entities
+- GET  /api/graph      — Get graph data for visualization
 - GET  /api/stats      — Graph statistics
 - GET  /health         — Health check
 """
@@ -32,7 +35,7 @@ from storage.neo4j_client import Neo4jClient
 from storage.vector_store import VectorStore
 from temporal.invalidation_agent import InvalidationAgent
 from temporal.resolution import EntityResolver
-from core.models import EpisodeType, IntentType, SearchQuery, SearchResponse, SearchResult
+from core.models import EpisodeType, IntentType
 from core.temporal_hints import extract_temporal_hint
 
 logger = logging.getLogger(__name__)
@@ -234,46 +237,13 @@ async def search(req: SearchRequest):
     if point_in_time is None:
         point_in_time = extract_temporal_hint(req.query)
 
-    search_query = SearchQuery(
-        query=req.query,
-        intent=intent,
-        point_in_time=point_in_time,
-        time_range_start=req.time_range_start,
-        time_range_end=req.time_range_end,
-        entity_types=req.entity_types,
-        limit=req.limit,
-    )
-
     try:
-        search_response = await query_engine.search(search_query)
-
-        # Broad search fallback when temporal hint detected but few results
-        if point_in_time and len(search_response.results) < 5:
-            broad_query = SearchQuery(
-                query=req.query,
-                intent=IntentType.STRUCTURAL,
-                limit=10,
-            )
-            broad_response = await query_engine.search(broad_query)
-
-            seen_ids = {r.id for r in search_response.results}
-            extra: list[SearchResult] = []
-            for r in broad_response.results:
-                if r.id not in seen_ids:
-                    if r.temporal and r.temporal.valid_at and point_in_time:
-                        if r.temporal.valid_at <= point_in_time:
-                            extra.append(r)
-                            seen_ids.add(r.id)
-                    else:
-                        extra.append(r)
-                        seen_ids.add(r.id)
-
-            merged = search_response.results + extra
-            search_response = SearchResponse(
-                query=search_query,
-                results=merged[:15],
-                total_count=len(merged),
-            )
+        search_response = await query_engine.search_with_fallback(
+            query=req.query,
+            point_in_time=point_in_time,
+            intent=intent,
+            limit=req.limit,
+        )
 
         result = await response_builder.build_response(
             query=req.query,
@@ -298,42 +268,10 @@ async def ask_question(req: AskRequest):
     temporal_hint = extract_temporal_hint(req.question)
 
     try:
-        # Primary search: hybrid with temporal hint
-        search_query = SearchQuery(
+        search_response = await query_engine.search_with_fallback(
             query=req.question,
-            intent=IntentType.HYBRID,
             point_in_time=temporal_hint,
-            limit=15,
         )
-        search_response = await query_engine.search(search_query)
-
-        # Broad search fallback when temporal hint detected but few results
-        if temporal_hint and len(search_response.results) < 5:
-            broad_query = SearchQuery(
-                query=req.question,
-                intent=IntentType.STRUCTURAL,
-                limit=10,
-            )
-            broad_response = await query_engine.search(broad_query)
-
-            seen_ids = {r.id for r in search_response.results}
-            extra: list[SearchResult] = []
-            for r in broad_response.results:
-                if r.id not in seen_ids:
-                    if r.temporal and r.temporal.valid_at and temporal_hint:
-                        if r.temporal.valid_at <= temporal_hint:
-                            extra.append(r)
-                            seen_ids.add(r.id)
-                    else:
-                        extra.append(r)
-                        seen_ids.add(r.id)
-
-            merged = search_response.results + extra
-            search_response = SearchResponse(
-                query=search_query,
-                results=merged[:15],
-                total_count=len(merged),
-            )
 
         result = await response_builder.build_response(
             query=req.question,
@@ -364,6 +302,28 @@ async def get_evolution(event_id: str):
     try:
         chain = await query_engine.get_evolution(event_id)
         return {"success": True, "data": chain}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/entities")
+async def list_entities():
+    """List all entities in the knowledge graph."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        entities = await neo4j.get_all_entities()
+        return {"success": True, "data": entities}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/graph")
+async def get_graph():
+    """Get graph data (nodes + edges) for visualization."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        graph = await neo4j.get_graph_data()
+        return {"success": True, "data": graph}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -9,8 +9,9 @@
 
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
-**Commit**: `dba99d4`
-**Тесты**: 83 unit + 30 integration = 113 total
+**Latest commit**: `b15fffd`
+**Тесты**: 90 unit + 30 integration = 120 total
+**README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
 
@@ -90,6 +91,8 @@ docker compose up -d
 | POST | `/api/ask` | Question + LLM answer (mirrors MCP `tkb_ask`) |
 | GET | `/api/timeline/{entity_id}` | Timeline сущности |
 | GET | `/api/evolution/{event_id}` | Цепочка SUPERSEDED_BY |
+| GET | `/api/entities` | Список всех entities (для autocomplete) |
+| GET | `/api/graph` | Nodes + edges для визуализации графа |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
 
@@ -206,11 +209,12 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 - `extract_temporal_hint(question)` → regex рус/англ date extraction
 - Used by: `mcp_server.py` (backward-compat wrapper), `api/server.py` (direct import)
 
-### Streamlit UI Features
+### Streamlit UI Features (5 tabs)
 
 - **Ingest tab**: paste text OR file upload (TXT/MD/JSON/PDF/DOCX/PPTX/XLSX/HTML, max 10MB)
 - **Search tab**: calls `/api/ask` with auto temporal hints
-- **Timeline tab**: entity timeline + fact evolution chains
+- **Timeline tab**: entity autocomplete dropdown + fact evolution chains
+- **Graph tab**: interactive knowledge graph visualization (`streamlit-agraph`, color-coded by entity type)
 - **Stats tab**: graph statistics (entities, events, episodes)
 
 **File upload pipeline**: `st.file_uploader → DoclingLoader.load_bytes() → /api/ingest`
@@ -250,9 +254,45 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 - [x] File upload (TXT/MD/JSON/PDF) ✅ `827bda3`
 - [x] `/api/ask` endpoint (MCP parity) ✅ `827bda3`
 - [x] Shared `core/temporal_hints.py` ✅ `827bda3`
-- [x] Docling integration (PDF, DOCX, PPTX, XLSX, HTML) ✅
+- [x] Docling integration (PDF, DOCX, PPTX, XLSX, HTML) ✅ `957ff0a`
 - [x] Table-aware chunking ✅
 - [x] POST /api/ingest/file endpoint ✅
 - [x] MCP tkb_ingest file_path parameter ✅
 - [x] Document metadata enrichment ✅
+- [x] Docling installed and tested (PDF with table + chart) ✅ `4a6ecdc`
+- [x] README.md with installation guide ✅ `b15fffd`
 - [ ] Community detection (Graphiti `build_communities`)
+
+## План улучшений (2026-02-08)
+
+### Высокий приоритет
+
+| # | Задача | Усилие | Описание |
+|---|--------|--------|----------|
+| ~~1~~ | ~~Graph Visualization в UI~~ | ~~1-2ч~~ | ~~DONE~~ Entity autocomplete в Timeline tab, Graph tab (`streamlit-agraph`) |
+| ~~2~~ | ~~Рефакторинг дубликата search/ask~~ | ~~30мин~~ | ~~DONE~~ `QueryEngine.search_with_fallback()` — дубликат из 3 мест устранён |
+| 3 | CI/CD Pipeline | 30мин | `.github/workflows/ci.yml` — pytest (unit), black, isort, badge в README |
+| 4 | API Authentication | 1ч | `X-API-Key` header middleware, настройка через `.env` |
+
+### Средний приоритет
+
+| # | Задача | Усилие | Описание |
+|---|--------|--------|----------|
+| 5 | Batch Ingestion | 2ч | `POST /api/ingest/batch` (массив), `POST /api/ingest/directory`, progress bar в Streamlit |
+| 6 | Entity Explorer tab | 2-3ч | 5-я вкладка: таблица entities с фильтрами, поиск по имени, связи, drill-down в timeline |
+| 7 | Export / Import | 2ч | `GET /api/export` JSON dump, `POST /api/import` restore, кнопка Export в Stats |
+| 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |
+| 9 | Docker Compose full stack | 1ч | Добавить api + ui сервисы к существующему neo4j |
+
+### Низкий приоритет
+
+| # | Задача | Описание |
+|---|--------|----------|
+| 10 | Community Detection | Graphiti `build_communities` для кластеризации |
+| 11 | Webhook Notifications | Уведомления при contradictions |
+| 12 | Multi-language Hints | Расширить temporal_hints.py |
+| 13 | Caching Layer | Кеш OpenAI вызовов (intent classification, response generation) |
+| 14 | Metrics / Monitoring | Prometheus или Phoenix MCP tracing |
+
+### Рекомендуемый порядок
+`~~#2~~ → ~~#1~~ → #3 → #4 → #6 → #9 → #5 → #7`

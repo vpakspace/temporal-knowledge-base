@@ -7,6 +7,7 @@ Query Decomposition) and Layers 8-11 (Retrieval).
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from core.models import (
@@ -126,6 +127,56 @@ class QueryEngine:
                 )
 
         return results
+
+    async def search_with_fallback(
+        self,
+        query: str,
+        point_in_time: datetime | None = None,
+        intent: IntentType = IntentType.HYBRID,
+        limit: int = 15,
+    ) -> SearchResponse:
+        """Search with automatic broad fallback when temporal hint yields few results.
+
+        1. Primary search with given intent + point_in_time
+        2. If point_in_time set and <5 results → broad structural search
+        3. Merge results, filter by valid_at <= point_in_time, dedup by id
+        """
+        search_query = SearchQuery(
+            query=query,
+            intent=intent,
+            point_in_time=point_in_time,
+            limit=limit,
+        )
+        search_response = await self.search(search_query)
+
+        if not point_in_time or len(search_response.results) >= 5:
+            return search_response
+
+        broad_query = SearchQuery(
+            query=query,
+            intent=IntentType.STRUCTURAL,
+            limit=10,
+        )
+        broad_response = await self.search(broad_query)
+
+        seen_ids = {r.id for r in search_response.results}
+        extra: list[SearchResult] = []
+        for r in broad_response.results:
+            if r.id not in seen_ids:
+                if r.temporal and r.temporal.valid_at and point_in_time:
+                    if r.temporal.valid_at <= point_in_time:
+                        extra.append(r)
+                        seen_ids.add(r.id)
+                else:
+                    extra.append(r)
+                    seen_ids.add(r.id)
+
+        merged = search_response.results + extra
+        return SearchResponse(
+            query=search_query,
+            results=merged[:limit],
+            total_count=len(merged),
+        )
 
     async def get_timeline(self, entity_id: str) -> list[dict[str, Any]]:
         """Get full timeline of changes for an entity."""

@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 import streamlit as st
+from streamlit_agraph import agraph, Node, Edge, Config
 
 # Add project root to path for imports
 _project_root = str(Path(__file__).resolve().parent.parent)
@@ -89,9 +90,21 @@ def extract_text_from_file(uploaded_file) -> tuple[str | None, dict | None]:
         return None, None
 
 
+# --- Entity cache for autocomplete ---
+
+
+@st.cache_data(ttl=30)
+def _fetch_entities() -> list[dict]:
+    """Fetch entities list from API (cached 30s)."""
+    result = api_call("GET", "/api/entities")
+    if result and result.get("success"):
+        return result["data"]
+    return []
+
+
 # --- Tabs ---
-tab_ingest, tab_search, tab_timeline, tab_stats = st.tabs(
-    ["Ingest", "Search", "Timeline", "Stats"]
+tab_ingest, tab_search, tab_timeline, tab_graph, tab_stats = st.tabs(
+    ["Ingest", "Search", "Timeline", "Graph", "Stats"]
 )
 
 # --- Tab 1: Ingest ---
@@ -238,7 +251,25 @@ with tab_search:
 with tab_timeline:
     st.header("Entity Timeline")
 
-    entity_id = st.text_input("Entity ID", placeholder="Enter entity UUID")
+    entities = _fetch_entities()
+    entity_options = {
+        f"{e['name']} ({e.get('entity_type', '?')})": e["id"]
+        for e in entities
+    }
+
+    col_select, col_manual = st.columns([3, 1])
+    with col_select:
+        selected_label = st.selectbox(
+            "Select entity",
+            options=[""] + list(entity_options.keys()),
+            index=0,
+            placeholder="Choose an entity...",
+        )
+    with col_manual:
+        manual_id = st.text_input("Or enter ID", placeholder="UUID")
+
+    entity_id = entity_options.get(selected_label, "") or manual_id
+
     if st.button("Get Timeline", disabled=not entity_id):
         with st.spinner("Loading timeline..."):
             result = api_call("GET", f"/api/timeline/{entity_id}")
@@ -246,10 +277,10 @@ with tab_timeline:
                 events = result["data"]
                 if events:
                     for ev in events:
-                        superseded = " → superseded" if ev.get("superseded_by") else ""
-                        current = "🟢" if ev.get("is_current") else "🔴"
+                        superseded = " -> superseded" if ev.get("superseded_by") else ""
+                        current_icon = "🟢" if ev.get("is_current") else "🔴"
                         st.markdown(
-                            f"{current} **{ev.get('valid_at', '?')}**: "
+                            f"{current_icon} **{ev.get('valid_at', '?')}**: "
                             f"{ev.get('statement', '')}{superseded}"
                         )
                 else:
@@ -264,14 +295,85 @@ with tab_timeline:
             if result and result.get("success"):
                 chain = result["data"]
                 for i, ev in enumerate(chain):
-                    current = "🟢 CURRENT" if ev.get("is_current") else "🔴 Superseded"
+                    status = "🟢 CURRENT" if ev.get("is_current") else "🔴 Superseded"
                     st.markdown(
-                        f"**Step {i + 1}** ({current}): {ev.get('statement', '')}\n"
+                        f"**Step {i + 1}** ({status}): {ev.get('statement', '')}\n"
                         f"- Valid: {ev.get('valid_at', '?')} | "
                         f"Invalid: {ev.get('invalid_at', '-')}"
                     )
 
-# --- Tab 4: Stats ---
+# --- Tab 4: Graph ---
+with tab_graph:
+    st.header("Knowledge Graph")
+
+    if st.button("Load Graph"):
+        with st.spinner("Loading graph data..."):
+            result = api_call("GET", "/api/graph")
+            if result and result.get("success"):
+                data = result["data"]
+                nodes_data = data.get("nodes", [])
+                edges_data = data.get("edges", [])
+
+                if not nodes_data:
+                    st.info("No entities in the graph yet. Ingest some data first.")
+                else:
+                    st.caption(f"{len(nodes_data)} entities, {len(edges_data)} relationships")
+
+                    # Color by entity type
+                    type_colors = {}
+                    palette = [
+                        "#4CAF50", "#2196F3", "#FF9800", "#9C27B0",
+                        "#F44336", "#00BCD4", "#795548", "#607D8B",
+                    ]
+                    for n in nodes_data:
+                        t = n.get("entity_type", "unknown")
+                        if t not in type_colors:
+                            type_colors[t] = palette[len(type_colors) % len(palette)]
+
+                    ag_nodes = [
+                        Node(
+                            id=n["id"],
+                            label=n.get("name", n["id"][:8]),
+                            size=20,
+                            color=type_colors.get(n.get("entity_type", ""), "#607D8B"),
+                        )
+                        for n in nodes_data
+                    ]
+
+                    # Only include edges where both source and target exist
+                    node_ids = {n["id"] for n in nodes_data}
+                    ag_edges = [
+                        Edge(
+                            source=e["source"],
+                            target=e["target"],
+                            label=e.get("label", ""),
+                        )
+                        for e in edges_data
+                        if e["source"] in node_ids and e["target"] in node_ids
+                    ]
+
+                    config = Config(
+                        width=900,
+                        height=500,
+                        directed=True,
+                        physics=True,
+                        hierarchical=False,
+                    )
+
+                    agraph(nodes=ag_nodes, edges=ag_edges, config=config)
+
+                    # Legend
+                    if type_colors:
+                        st.subheader("Legend")
+                        cols = st.columns(min(len(type_colors), 4))
+                        for i, (t, color) in enumerate(type_colors.items()):
+                            cols[i % len(cols)].markdown(
+                                f"<span style='color:{color}'>&#9679;</span> {t}",
+                                unsafe_allow_html=True,
+                            )
+
+
+# --- Tab 5: Stats ---
 with tab_stats:
     st.header("Graph Statistics")
 

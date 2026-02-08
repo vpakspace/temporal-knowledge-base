@@ -14,6 +14,7 @@ python-multipart>=0.0.6
 
 # UI
 streamlit>=1.30.0
+streamlit-agraph>=0.0.45
 
 # Document processing
 docling>=2.0.0

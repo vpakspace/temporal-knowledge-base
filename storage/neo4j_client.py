@@ -344,6 +344,43 @@ class Neo4jClient:
             result = await session.run(query, entity_ids=entity_ids)
             return [dict(record) async for record in result]
 
+    async def get_all_entities(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Get all entities with their basic info."""
+        query = """
+        MATCH (e:Entity)
+        RETURN e.id AS id, e.name AS name,
+               e.entity_type AS entity_type,
+               e.canonical_name AS canonical_name
+        ORDER BY e.name
+        LIMIT $limit
+        """
+        async with self.session() as session:
+            result = await session.run(query, limit=limit)
+            return [dict(record) async for record in result]
+
+    async def get_graph_data(self, limit: int = 100) -> dict[str, Any]:
+        """Get entities and relationships for graph visualization."""
+        nodes_query = """
+        MATCH (e:Entity)
+        RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type
+        ORDER BY e.name
+        LIMIT $limit
+        """
+        edges_query = """
+        MATCH (src:Entity)-[r:RELATES_TO]->(tgt:Entity)
+        RETURN src.id AS source, tgt.id AS target,
+               r.relationship_type AS label
+        LIMIT $limit
+        """
+        async with self.session() as session:
+            nodes_result = await session.run(nodes_query, limit=limit)
+            nodes = [dict(record) async for record in nodes_result]
+
+            edges_result = await session.run(edges_query, limit=limit)
+            edges = [dict(record) async for record in edges_result]
+
+        return {"nodes": nodes, "edges": edges}
+
     # --- Stats ---
 
     async def get_stats(self) -> dict[str, int]:

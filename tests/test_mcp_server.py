@@ -279,7 +279,7 @@ class TestExtractTemporalHint:
 @pytest.mark.asyncio
 async def test_ask_basic(patch_get_state):
     """Test ask with LLM response."""
-    patch_get_state.query_engine.search.return_value = SearchResponse(
+    patch_get_state.query_engine.search_with_fallback.return_value = SearchResponse(
         query=SearchQuery(query="Who is CEO?"),
         results=[
             SearchResult(id="r-1", content="Alice is CEO"),
@@ -302,7 +302,7 @@ async def test_ask_basic(patch_get_state):
 @pytest.mark.asyncio
 async def test_ask_with_timeline(patch_get_state):
     """Test ask with timeline included."""
-    patch_get_state.query_engine.search.return_value = SearchResponse(
+    patch_get_state.query_engine.search_with_fallback.return_value = SearchResponse(
         query=SearchQuery(query="CEO history"),
         results=[],
         total_count=0,
@@ -325,38 +325,32 @@ async def test_ask_with_timeline(patch_get_state):
 
 @pytest.mark.asyncio
 async def test_ask_extracts_temporal_hint(patch_get_state):
-    """Test that ask with a year in the question passes point_in_time to search."""
-    patch_get_state.query_engine.search.return_value = SearchResponse(
+    """Test that ask with a year in the question passes point_in_time to search_with_fallback."""
+    patch_get_state.query_engine.search_with_fallback.return_value = SearchResponse(
         query=SearchQuery(query="investment in 2023"),
         results=[
             SearchResult(id="r-1", content="Microsoft invested $1B"),
-            SearchResult(id="r-2", content="OpenAI was valued at $29B"),
-            SearchResult(id="r-3", content="Sam Altman was CEO"),
-            SearchResult(id="r-4", content="Partnership announced"),
-            SearchResult(id="r-5", content="AI sector growth"),
         ],
-        total_count=5,
+        total_count=1,
     )
     patch_get_state.response_builder.build_response.return_value = {
         "answer": "Microsoft invested $1B in OpenAI in 2023.",
-        "facts_used": 2,
+        "facts_used": 1,
         "sources": [],
         "timeline": None,
     }
 
     await mcp_server._tkb_ask_impl(question="сколько Microsoft инвестировал в 2023 году")
 
-    # First search call should have point_in_time set
-    first_call = patch_get_state.query_engine.search.call_args_list[0]
-    search_query = first_call[0][0]
-    assert search_query.point_in_time is not None
-    assert search_query.point_in_time.year == 2023
+    call_kwargs = patch_get_state.query_engine.search_with_fallback.call_args.kwargs
+    assert call_kwargs["point_in_time"] is not None
+    assert call_kwargs["point_in_time"].year == 2023
 
 
 @pytest.mark.asyncio
 async def test_ask_no_temporal_hint_no_point_in_time(patch_get_state):
-    """Test that ask without temporal reference does not set point_in_time."""
-    patch_get_state.query_engine.search.return_value = SearchResponse(
+    """Test that ask without temporal reference passes point_in_time=None."""
+    patch_get_state.query_engine.search_with_fallback.return_value = SearchResponse(
         query=SearchQuery(query="Who is CEO?"),
         results=[
             SearchResult(id="r-1", content="Alice is CEO"),
@@ -372,61 +366,8 @@ async def test_ask_no_temporal_hint_no_point_in_time(patch_get_state):
 
     await mcp_server._tkb_ask_impl(question="кто является CEO OpenAI")
 
-    first_call = patch_get_state.query_engine.search.call_args_list[0]
-    search_query = first_call[0][0]
-    assert search_query.point_in_time is None
-
-
-@pytest.mark.asyncio
-async def test_ask_broadens_search_on_few_results(patch_get_state):
-    """Test that ask performs a second broader search when few results found."""
-    # First search returns few results (< 5) → triggers broad search
-    patch_get_state.query_engine.search.side_effect = [
-        SearchResponse(
-            query=SearchQuery(query="test"),
-            results=[
-                SearchResult(
-                    id="r-1",
-                    content="Microsoft invested $1B in 2023",
-                    temporal=TemporalMetadata(
-                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
-                    ),
-                ),
-            ],
-            total_count=1,
-        ),
-        SearchResponse(
-            query=SearchQuery(query="test"),
-            results=[
-                SearchResult(
-                    id="r-1",
-                    content="Microsoft invested $1B in 2023",
-                    temporal=TemporalMetadata(
-                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
-                    ),
-                ),
-                SearchResult(
-                    id="r-2",
-                    content="OpenAI valued at $29B",
-                    temporal=TemporalMetadata(
-                        valid_at=datetime(2023, 1, 15, tzinfo=UTC),
-                    ),
-                ),
-            ],
-            total_count=2,
-        ),
-    ]
-    patch_get_state.response_builder.build_response.return_value = {
-        "answer": "In 2023, Microsoft invested $1B.",
-        "facts_used": 2,
-        "sources": [],
-        "timeline": None,
-    }
-
-    await mcp_server._tkb_ask_impl(question="инвестиции в 2023 году")
-
-    # Should have made 2 search calls: primary + broad
-    assert patch_get_state.query_engine.search.call_count == 2
+    call_kwargs = patch_get_state.query_engine.search_with_fallback.call_args.kwargs
+    assert call_kwargs["point_in_time"] is None
 
 
 # --- tkb_timeline ---

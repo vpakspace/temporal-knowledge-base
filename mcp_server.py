@@ -259,51 +259,14 @@ async def _tkb_ask_impl(
     Automatically extracts temporal references from the question
     and uses them as point_in_time filters for more accurate results.
     """
-    from core.models import IntentType, SearchQuery, SearchResponse, SearchResult
-
     state = await get_state()
 
-    # Extract temporal hint from question
     temporal_hint = _extract_temporal_hint(question)
 
-    # Primary search: hybrid (semantic + structural)
-    search_query = SearchQuery(
+    search_response = await state.query_engine.search_with_fallback(
         query=question,
-        intent=IntentType.HYBRID,
         point_in_time=temporal_hint,
-        limit=15,
     )
-    search_response = await state.query_engine.search(search_query)
-
-    # If temporal hint detected and few results, do a broader structural search too
-    if temporal_hint and len(search_response.results) < 5:
-        broad_query = SearchQuery(
-            query=question,
-            intent=IntentType.STRUCTURAL,
-            limit=10,
-        )
-        broad_response = await state.query_engine.search(broad_query)
-
-        # Merge results, dedup by id
-        seen_ids = {r.id for r in search_response.results}
-        extra: list[SearchResult] = []
-        for r in broad_response.results:
-            if r.id not in seen_ids:
-                # If temporal hint present, prefer facts from that time period
-                if r.temporal and r.temporal.valid_at and temporal_hint:
-                    if r.temporal.valid_at <= temporal_hint:
-                        extra.append(r)
-                        seen_ids.add(r.id)
-                else:
-                    extra.append(r)
-                    seen_ids.add(r.id)
-
-        merged_results = search_response.results + extra
-        search_response = SearchResponse(
-            query=search_query,
-            results=merged_results[:15],
-            total_count=len(merged_results),
-        )
 
     result = await state.response_builder.build_response(
         query=question,
