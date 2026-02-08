@@ -219,9 +219,7 @@ async def test_fallback_respects_limit(query_engine):
     )
     query_engine.search.side_effect = [primary, broad]
 
-    result = await query_engine.search_with_fallback(
-        query="test", point_in_time=pit, limit=5
-    )
+    result = await query_engine.search_with_fallback(query="test", point_in_time=pit, limit=5)
 
     assert len(result.results) <= 5
 
@@ -236,9 +234,7 @@ async def test_fallback_passes_intent_to_primary_search(query_engine):
     )
     query_engine.search.return_value = primary
 
-    await query_engine.search_with_fallback(
-        query="test", intent=IntentType.TEMPORAL
-    )
+    await query_engine.search_with_fallback(query="test", intent=IntentType.TEMPORAL)
 
     call_args = query_engine.search.call_args[0][0]
     assert call_args.intent == IntentType.TEMPORAL

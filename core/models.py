@@ -14,11 +14,12 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-
 # --- Enums ---
+
 
 class EpisodeType(str, Enum):
     """Type of episode being ingested."""
+
     TEXT = "text"
     JSON = "json"
     CHAT = "chat"
@@ -27,39 +28,45 @@ class EpisodeType(str, Enum):
 
 class FactType(str, Enum):
     """Classification of temporal facts."""
-    STATIC = "static"        # Rarely changes (e.g., date of birth)
-    DYNAMIC = "dynamic"      # Changes over time (e.g., job title)
+
+    STATIC = "static"  # Rarely changes (e.g., date of birth)
+    DYNAMIC = "dynamic"  # Changes over time (e.g., job title)
     ATEMPORAL = "atemporal"  # Not time-bound (e.g., mathematical truth)
 
 
 class InvalidationMode(str, Enum):
     """How entity properties should be invalidated on update."""
-    REPLACE = "replace"      # New value replaces old (e.g., CEO)
+
+    REPLACE = "replace"  # New value replaces old (e.g., CEO)
     ACCUMULATE = "accumulate"  # Values accumulate (e.g., skills list)
     VERSIONED = "versioned"  # Keep full version history
 
 
 class DriftSeverity(str, Enum):
     """Severity of detected contradiction."""
+
     CRITICAL = "critical"  # Direct contradiction
-    WARNING = "warning"    # Potential conflict
-    INFO = "info"          # Minor update
+    WARNING = "warning"  # Potential conflict
+    INFO = "info"  # Minor update
 
 
 class IntentType(str, Enum):
     """Query intent classification (GraphOS Layer 3)."""
+
     STRUCTURAL = "structural"  # "Who works for X?"
-    TEMPORAL = "temporal"      # "What changed in 2024?"
-    HYBRID = "hybrid"          # "Who was CEO when revenue peaked?"
+    TEMPORAL = "temporal"  # "What changed in 2024?"
+    HYBRID = "hybrid"  # "Who was CEO when revenue peaked?"
 
 
 # --- Core Models ---
 
+
 class TemporalMetadata(BaseModel):
     """Bi-temporal metadata attached to nodes and edges."""
-    valid_at: datetime | None = None        # When fact became true in reality
-    invalid_at: datetime | None = None      # When fact was superseded
-    expired_at: datetime | None = None      # When fact naturally expired
+
+    valid_at: datetime | None = None  # When fact became true in reality
+    invalid_at: datetime | None = None  # When fact was superseded
+    expired_at: datetime | None = None  # When fact naturally expired
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))  # Transaction time
     is_current: bool = True
     source_episode_id: str | None = None
@@ -67,6 +74,7 @@ class TemporalMetadata(BaseModel):
 
 class Entity(BaseModel):
     """Node in the Entity Layer (structural graph)."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     name: str
     entity_type: str  # e.g., "Person", "Organization", "Product"
@@ -83,6 +91,7 @@ class Entity(BaseModel):
 
 class Relationship(BaseModel):
     """Edge between entities in the Entity Layer."""
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     source_id: str
     target_id: str
@@ -99,6 +108,7 @@ class TemporalEvent(BaseModel):
     Represents a single statement extracted from a source,
     with bi-temporal tracking and contradiction detection.
     """
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     statement: str  # The atomic fact as text
     fact_type: FactType = FactType.DYNAMIC
@@ -115,6 +125,7 @@ class Episode(BaseModel):
 
     Episodes are the primary input mechanism (Graphiti's add_episode).
     """
+
     id: str = Field(default_factory=lambda: str(uuid4()))
     content: str
     episode_type: EpisodeType = EpisodeType.TEXT
@@ -126,8 +137,10 @@ class Episode(BaseModel):
 
 # --- Extraction Results ---
 
+
 class ExtractionResult(BaseModel):
     """Result of dual-track extraction from an episode."""
+
     episode_id: str
     entities: list[Entity] = Field(default_factory=list)
     relationships: list[Relationship] = Field(default_factory=list)
@@ -136,8 +149,10 @@ class ExtractionResult(BaseModel):
 
 # --- Invalidation ---
 
+
 class InvalidationCandidate(BaseModel):
     """A pair of events where the new one may supersede the old."""
+
     existing_event: TemporalEvent
     new_event: TemporalEvent
     temporal_overlap: bool = False
@@ -148,6 +163,7 @@ class InvalidationCandidate(BaseModel):
 
 class InvalidationResult(BaseModel):
     """Result of invalidation agent processing."""
+
     invalidated_events: list[str] = Field(default_factory=list)  # IDs
     supersede_pairs: list[tuple[str, str]] = Field(default_factory=list)  # (old_id, new_id)
     severity: DriftSeverity = DriftSeverity.INFO
@@ -155,8 +171,10 @@ class InvalidationResult(BaseModel):
 
 # --- Search & Query ---
 
+
 class SearchQuery(BaseModel):
     """Unified search query with temporal filtering."""
+
     query: str
     intent: IntentType = IntentType.HYBRID
     point_in_time: datetime | None = None  # For point-in-time snapshots
@@ -169,6 +187,7 @@ class SearchQuery(BaseModel):
 
 class SearchResult(BaseModel):
     """A single search result with temporal context."""
+
     id: str
     content: str
     score: float = 0.0
@@ -181,6 +200,7 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     """Complete search response with timeline."""
+
     query: SearchQuery
     results: list[SearchResult] = Field(default_factory=list)
     timeline: list[TemporalEvent] | None = None

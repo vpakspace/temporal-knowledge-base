@@ -24,19 +24,19 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from core.config import get_settings
-from ingestion.document_loader import DoclingLoader
+from core.models import EpisodeType, IntentType
+from core.temporal_hints import extract_temporal_hint
 from generation.llm_client import LLMClient
 from generation.response_builder import ResponseBuilder
 from generation.temporal_verifier import TemporalVerifier
 from graphiti_adapter.client import GraphitiClient
+from ingestion.document_loader import DoclingLoader
 from ingestion.pipeline import IngestionPipeline
 from retrieval.query_engine import QueryEngine
 from storage.neo4j_client import Neo4jClient
 from storage.vector_store import VectorStore
 from temporal.invalidation_agent import InvalidationAgent
 from temporal.resolution import EntityResolver
-from core.models import EpisodeType, IntentType
-from core.temporal_hints import extract_temporal_hint
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,7 @@ app = FastAPI(
 
 # --- Request/Response models ---
 
+
 class IngestRequest(BaseModel):
     content: str
     source: str = "manual"
@@ -123,6 +124,7 @@ class AskRequest(BaseModel):
 
 
 # --- Endpoints ---
+
 
 @app.get("/health")
 async def health():

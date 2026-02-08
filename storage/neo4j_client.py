@@ -329,9 +329,7 @@ class Neo4jClient:
             result = await session.run(query, embedding=embedding, limit=limit)
             return [dict(record) async for record in result]
 
-    async def get_current_events_for_entities(
-        self, entity_ids: list[str]
-    ) -> list[dict[str, Any]]:
+    async def get_current_events_for_entities(self, entity_ids: list[str]) -> list[dict[str, Any]]:
         """Get all current temporal events for given entities."""
         query = """
         MATCH (te:TemporalEvent)-[:MENTIONS]->(e:Entity)

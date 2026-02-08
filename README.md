@@ -1,5 +1,7 @@
 # Temporal Knowledge Base
 
+[![CI](https://github.com/vpakspace/temporal-knowledge-base/actions/workflows/ci.yml/badge.svg)](https://github.com/vpakspace/temporal-knowledge-base/actions/workflows/ci.yml)
+
 Bi-temporal knowledge graph framework built on [Graphiti](https://github.com/getzep/graphiti) (Zep AI) and the GraphOS 16-layer architecture. Ingest text, documents, and structured data into a Neo4j-backed temporal graph with automatic entity resolution, fact invalidation, and hybrid search.
 
 ## Key Features

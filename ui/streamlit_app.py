@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 import streamlit as st
-from streamlit_agraph import agraph, Node, Edge, Config
+from streamlit_agraph import Config, Edge, Node, agraph
 
 # Add project root to path for imports
 _project_root = str(Path(__file__).resolve().parent.parent)
@@ -129,9 +129,7 @@ with tab_ingest:
             )
         with col2:
             source = st.text_input("Source", value="manual")
-            episode_type = st.selectbox(
-                "Type", ["text", "json", "chat", "document"]
-            )
+            episode_type = st.selectbox("Type", ["text", "json", "chat", "document"])
             group_id = st.text_input("Group ID (optional)", value="")
     else:
         col1, col2 = st.columns([3, 1])
@@ -252,10 +250,7 @@ with tab_timeline:
     st.header("Entity Timeline")
 
     entities = _fetch_entities()
-    entity_options = {
-        f"{e['name']} ({e.get('entity_type', '?')})": e["id"]
-        for e in entities
-    }
+    entity_options = {f"{e['name']} ({e.get('entity_type', '?')})": e["id"] for e in entities}
 
     col_select, col_manual = st.columns([3, 1])
     with col_select:
@@ -322,8 +317,14 @@ with tab_graph:
                     # Color by entity type
                     type_colors = {}
                     palette = [
-                        "#4CAF50", "#2196F3", "#FF9800", "#9C27B0",
-                        "#F44336", "#00BCD4", "#795548", "#607D8B",
+                        "#4CAF50",
+                        "#2196F3",
+                        "#FF9800",
+                        "#9C27B0",
+                        "#F44336",
+                        "#00BCD4",
+                        "#795548",
+                        "#607D8B",
                     ]
                     for n in nodes_data:
                         t = n.get("entity_type", "unknown")

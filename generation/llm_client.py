@@ -93,9 +93,7 @@ class LLMClient:
             return "hybrid"
         return intent
 
-    async def check_contradiction(
-        self, existing_fact: str, new_fact: str
-    ) -> dict[str, Any]:
+    async def check_contradiction(self, existing_fact: str, new_fact: str) -> dict[str, Any]:
         """Check if two facts contradict each other using LLM.
 
         Returns: {"contradicts": bool, "explanation": str, "severity": str}

@@ -46,6 +46,7 @@ def mock_state():
 @pytest.fixture
 def patch_get_state(mock_state):
     """Patch get_state to return mock state without real initialization."""
+
     async def _get_state():
         return mock_state
 
@@ -408,9 +409,24 @@ async def test_timeline(patch_get_state):
 async def test_evolution(patch_get_state):
     """Test SUPERSEDED_BY chain retrieval."""
     patch_get_state.neo4j.get_supersession_chain.return_value = [
-        {"id": "ev-1", "statement": "Revenue was $1M", "valid_at": "2022-01-01", "is_current": False},
-        {"id": "ev-2", "statement": "Revenue grew to $5M", "valid_at": "2023-01-01", "is_current": False},
-        {"id": "ev-3", "statement": "Revenue reached $10M", "valid_at": "2024-01-01", "is_current": True},
+        {
+            "id": "ev-1",
+            "statement": "Revenue was $1M",
+            "valid_at": "2022-01-01",
+            "is_current": False,
+        },
+        {
+            "id": "ev-2",
+            "statement": "Revenue grew to $5M",
+            "valid_at": "2023-01-01",
+            "is_current": False,
+        },
+        {
+            "id": "ev-3",
+            "statement": "Revenue reached $10M",
+            "valid_at": "2024-01-01",
+            "is_current": True,
+        },
     ]
 
     result = await mcp_server._tkb_evolution_impl(event_id="ev-1")

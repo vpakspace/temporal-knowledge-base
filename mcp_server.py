@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 # --- Lazy singleton state ---
 
+
 class _State:
     """Holds initialized resources. Created once on first tool call."""
 
@@ -235,7 +236,9 @@ async def _tkb_search_impl(
                 "id": r.id,
                 "content": r.content,
                 "type": r.result_type,
-                "valid_at": r.temporal.valid_at.isoformat() if r.temporal and r.temporal.valid_at else None,
+                "valid_at": (
+                    r.temporal.valid_at.isoformat() if r.temporal and r.temporal.valid_at else None
+                ),
                 "is_current": r.temporal.is_current if r.temporal else True,
             }
             for r in response.results
@@ -247,6 +250,7 @@ async def _tkb_search_impl(
 def _extract_temporal_hint(question: str) -> datetime | None:
     """Wrapper for shared extract_temporal_hint (backward compat for tests)."""
     from core.temporal_hints import extract_temporal_hint
+
     return extract_temporal_hint(question)
 
 

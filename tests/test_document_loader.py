@@ -16,7 +16,6 @@ import pytest
 
 from ingestion.document_loader import DoclingLoader, DocumentResult
 
-
 # --- DocumentResult tests ---
 
 

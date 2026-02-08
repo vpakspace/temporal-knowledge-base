@@ -58,9 +58,7 @@ def invalidation_agent(
 
 
 @pytest.fixture
-def entity_resolver(
-    neo4j_clean: Neo4jClient, vectors: VectorStore
-) -> EntityResolver:
+def entity_resolver(neo4j_clean: Neo4jClient, vectors: VectorStore) -> EntityResolver:
     return EntityResolver(neo4j_clean, vectors)
 
 

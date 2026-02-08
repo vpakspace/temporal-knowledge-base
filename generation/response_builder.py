@@ -78,7 +78,13 @@ class ResponseBuilder:
             "answer": answer,
             "facts_used": len(verified),
             "sources": [
-                {"id": r.id, "content": r.content, "valid_at": str(r.temporal.valid_at) if r.temporal and r.temporal.valid_at else None}
+                {
+                    "id": r.id,
+                    "content": r.content,
+                    "valid_at": (
+                        str(r.temporal.valid_at) if r.temporal and r.temporal.valid_at else None
+                    ),
+                }
                 for r in verified
             ],
             "timeline": timeline,
@@ -98,10 +104,7 @@ class ResponseBuilder:
 
     def _build_timeline(self, results: list[SearchResult]) -> list[dict[str, Any]]:
         """Build a chronological timeline from results."""
-        timed = [
-            r for r in results
-            if r.temporal and r.temporal.valid_at
-        ]
+        timed = [r for r in results if r.temporal and r.temporal.valid_at]
         timed.sort(key=lambda r: r.temporal.valid_at)
         return [
             {

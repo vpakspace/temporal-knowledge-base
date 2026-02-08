@@ -159,9 +159,7 @@ class IngestionPipeline:
         logger.info("Episode ingested: %s", summary)
         return summary
 
-    async def ingest_batch(
-        self, episodes: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def ingest_batch(self, episodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Ingest multiple episodes sequentially."""
         results = []
         for ep_data in episodes:

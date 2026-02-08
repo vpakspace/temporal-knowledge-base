@@ -119,13 +119,13 @@ class GraphitiClient:
             )
             logger.info(
                 "Episode '%s' added (type=%s, source=%s)",
-                name, episode_type.value, source,
+                name,
+                episode_type.value,
+                source,
             )
             return result.model_dump() if hasattr(result, "model_dump") else {}
         except Exception as e:
-            raise EpisodeProcessingError(
-                f"Failed to add episode '{name}': {e}"
-            ) from e
+            raise EpisodeProcessingError(f"Failed to add episode '{name}': {e}") from e
 
     async def add_episode_bulk(
         self,
@@ -217,6 +217,4 @@ class GraphitiClient:
             await self.graphiti.remove_episode(episode_uuid)
             logger.info("Episode %s removed", episode_uuid)
         except Exception as e:
-            raise EpisodeProcessingError(
-                f"Failed to remove episode {episode_uuid}: {e}"
-            ) from e
+            raise EpisodeProcessingError(f"Failed to remove episode {episode_uuid}: {e}") from e

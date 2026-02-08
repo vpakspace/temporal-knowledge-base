@@ -7,6 +7,7 @@ Embeddings are stored directly in Neo4j nodes (via vector indexes).
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 from openai import AsyncOpenAI
 

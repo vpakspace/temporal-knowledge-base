@@ -48,7 +48,10 @@ TOOLS = [
                 "content": {"default": "", "type": "string"},
                 "source": {"default": "manual", "type": "string"},
                 "episode_type": {"default": "text", "type": "string"},
-                "reference_time": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
+                "reference_time": {
+                    "anyOf": [{"type": "string"}, {"type": "null"}],
+                    "default": None,
+                },
                 "group_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
                 "file_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
             },
@@ -153,8 +156,8 @@ _real_server_ready = threading.Event()
 
 def _start_real_server():
     """Start the real FastMCP server in a subprocess for tool/call delegation."""
-    import subprocess
     import os
+    import subprocess
 
     global _real_server_proc
     env = os.environ.copy()
@@ -227,28 +230,32 @@ def main():
         msg_id = msg.get("id")
 
         if method == "initialize":
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {"listChanged": False},
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {
+                            "tools": {"listChanged": False},
+                        },
+                        "serverInfo": SERVER_INFO,
                     },
-                    "serverInfo": SERVER_INFO,
-                },
-            })
+                }
+            )
 
         elif method == "notifications/initialized":
             # No response needed for notifications
             pass
 
         elif method == "tools/list":
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"tools": TOOLS},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {"tools": TOOLS},
+                }
+            )
 
         elif method == "tools/call":
             # Delegate to real server
@@ -256,18 +263,22 @@ def main():
             _write_message(resp)
 
         elif method == "ping":
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "result": {},
+                }
+            )
 
         else:
-            _write_message({
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "error": {"code": -32601, "message": f"Method not found: {method}"},
-            })
+            _write_message(
+                {
+                    "jsonrpc": "2.0",
+                    "id": msg_id,
+                    "error": {"code": -32601, "message": f"Method not found: {method}"},
+                }
+            )
 
 
 if __name__ == "__main__":

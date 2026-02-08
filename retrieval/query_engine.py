@@ -193,6 +193,7 @@ def _parse_datetime(val: str | None):
         return None
     try:
         from datetime import datetime
+
         return datetime.fromisoformat(val)
     except (ValueError, TypeError):
         return None

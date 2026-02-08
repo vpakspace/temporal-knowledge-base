@@ -45,9 +45,7 @@ class InvalidationAgent:
         self._llm = llm
         self._similarity_threshold = settings.invalidation_similarity_threshold
 
-    async def process_new_events(
-        self, new_events: list[TemporalEvent]
-    ) -> InvalidationResult:
+    async def process_new_events(self, new_events: list[TemporalEvent]) -> InvalidationResult:
         """Process new events and invalidate contradicted existing ones."""
         invalidated_ids: list[str] = []
         supersede_pairs: list[tuple[str, str]] = []
@@ -63,9 +61,7 @@ class InvalidationAgent:
                         new_id=new_event.id,
                     )
                     invalidated_ids.append(candidate.existing_event.id)
-                    supersede_pairs.append(
-                        (candidate.existing_event.id, new_event.id)
-                    )
+                    supersede_pairs.append((candidate.existing_event.id, new_event.id))
                     logger.info(
                         "Superseded event '%s' with '%s'",
                         candidate.existing_event.statement[:50],
@@ -79,9 +75,7 @@ class InvalidationAgent:
             severity=max_severity if invalidated_ids else DriftSeverity.INFO,
         )
 
-    async def _find_candidates(
-        self, new_event: TemporalEvent
-    ) -> list[InvalidationCandidate]:
+    async def _find_candidates(self, new_event: TemporalEvent) -> list[InvalidationCandidate]:
         """Find existing events that may be contradicted by the new one.
 
         3-filter pipeline:
@@ -94,9 +88,7 @@ class InvalidationAgent:
             return []
 
         # Filter 2: shared entities — get existing current events for same entities
-        existing_records = await self._neo4j.get_current_events_for_entities(
-            new_event.entity_ids
-        )
+        existing_records = await self._neo4j.get_current_events_for_entities(new_event.entity_ids)
 
         candidates: list[InvalidationCandidate] = []
 
@@ -125,9 +117,7 @@ class InvalidationAgent:
             )
 
             # Filter 1: temporal overlap
-            candidate.temporal_overlap = self._check_temporal_overlap(
-                existing_event, new_event
-            )
+            candidate.temporal_overlap = self._check_temporal_overlap(existing_event, new_event)
 
             # Filter 3: semantic similarity
             if new_event.embedding and existing_event.embedding:
@@ -147,9 +137,7 @@ class InvalidationAgent:
 
         return candidates
 
-    def _check_temporal_overlap(
-        self, existing: TemporalEvent, new: TemporalEvent
-    ) -> bool:
+    def _check_temporal_overlap(self, existing: TemporalEvent, new: TemporalEvent) -> bool:
         """Check if two events have overlapping temporal scopes."""
         existing_valid = existing.temporal.valid_at
         new_valid = new.temporal.valid_at

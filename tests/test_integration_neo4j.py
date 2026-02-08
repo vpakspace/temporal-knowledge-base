@@ -183,9 +183,7 @@ async def test_point_in_time_query(neo4j_clean: Neo4jClient):
     await neo4j.create_temporal_event(ev3)
 
     # Query mid-2024: should see events 1 and 2 but not 3
-    results = await neo4j.query_point_in_time(
-        point=datetime(2024, 6, 1, tzinfo=UTC), limit=50
-    )
+    results = await neo4j.query_point_in_time(point=datetime(2024, 6, 1, tzinfo=UTC), limit=50)
     result_ids = {r["id"] for r in results}
     assert "test-pit-1" in result_ids
     assert "test-pit-2" in result_ids

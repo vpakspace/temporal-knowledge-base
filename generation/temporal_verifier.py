@@ -20,9 +20,7 @@ class TemporalVerifier:
     def __init__(self, neo4j: Neo4jClient) -> None:
         self._neo4j = neo4j
 
-    async def verify_results(
-        self, results: list[SearchResult]
-    ) -> list[SearchResult]:
+    async def verify_results(self, results: list[SearchResult]) -> list[SearchResult]:
         """Filter out superseded or invalidated results.
 
         For each result, check:
@@ -34,9 +32,7 @@ class TemporalVerifier:
 
         for result in results:
             if result.temporal and result.temporal.invalid_at:
-                logger.debug(
-                    "Skipping invalidated result: %s", result.content[:50]
-                )
+                logger.debug("Skipping invalidated result: %s", result.content[:50])
                 # Try to find the superseding event
                 if result.id:
                     chain = await self._neo4j.get_supersession_chain(result.id)
@@ -57,6 +53,7 @@ class TemporalVerifier:
 
         logger.info(
             "Verified %d/%d results as current",
-            len(verified), len(results),
+            len(verified),
+            len(results),
         )
         return verified

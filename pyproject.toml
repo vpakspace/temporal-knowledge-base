@@ -12,6 +12,14 @@ markers = [
     "integration: tests requiring real Neo4j and/or OpenAI API",
 ]
 
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
 [tool.pyright]
 pythonVersion = "3.12"
 venvPath = "."

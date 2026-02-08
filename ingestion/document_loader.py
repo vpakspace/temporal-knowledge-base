@@ -49,17 +49,15 @@ class DoclingLoader:
     def _get_converter(self) -> DocumentConverter:
         """Lazy-initialize Docling converter (models loaded on first call)."""
         if self._converter is None:
-            from docling.document_converter import DocumentConverter, PdfFormatOption
             from docling.datamodel.base_models import InputFormat
             from docling.datamodel.pipeline_options import PdfPipelineOptions
+            from docling.document_converter import DocumentConverter, PdfFormatOption
 
             pipeline_options = PdfPipelineOptions()
             pipeline_options.generate_picture_images = True
 
             self._converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-                }
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
             )
         return self._converter
 
@@ -97,12 +95,14 @@ class DoclingLoader:
                     page_num = None
                     if hasattr(item, "prov") and item.prov:
                         page_num = getattr(item.prov[0], "page_no", None)
-                    tables.append({
-                        "caption": getattr(item, "caption", "") or "",
-                        "markdown": df.to_markdown(index=False),
-                        "csv": df.to_csv(index=False),
-                        "page": page_num,
-                    })
+                    tables.append(
+                        {
+                            "caption": getattr(item, "caption", "") or "",
+                            "markdown": df.to_markdown(index=False),
+                            "csv": df.to_csv(index=False),
+                            "page": page_num,
+                        }
+                    )
                 except Exception:
                     pass  # Skip tables that fail to export
 
@@ -116,10 +116,12 @@ class DoclingLoader:
                         page_num = None
                         if hasattr(item, "prov") and item.prov:
                             page_num = getattr(item.prov[0], "page_no", None)
-                        images.append({
-                            "caption": getattr(item, "caption", "") or "",
-                            "page": page_num,
-                        })
+                        images.append(
+                            {
+                                "caption": getattr(item, "caption", "") or "",
+                                "page": page_num,
+                            }
+                        )
                 except Exception:
                     pass  # Skip images that fail to extract
 

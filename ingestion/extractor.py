@@ -74,12 +74,18 @@ class DualTrackExtractor:
         raw = await self._llm.generate_json(prompt, system=EXTRACTION_SYSTEM_PROMPT)
 
         entities = self._parse_entities(raw.get("entities", []), reference_time, source)
-        relationships = self._parse_relationships(raw.get("relationships", []), entities, reference_time, source)
-        events = self._parse_events(raw.get("temporal_events", []), entities, reference_time, source)
+        relationships = self._parse_relationships(
+            raw.get("relationships", []), entities, reference_time, source
+        )
+        events = self._parse_events(
+            raw.get("temporal_events", []), entities, reference_time, source
+        )
 
         logger.info(
             "Extracted %d entities, %d relationships, %d events from chunk",
-            len(entities), len(relationships), len(events),
+            len(entities),
+            len(relationships),
+            len(events),
         )
         return ExtractionResult(
             episode_id="",

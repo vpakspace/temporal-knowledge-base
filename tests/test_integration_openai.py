@@ -94,9 +94,7 @@ async def test_classify_temporal_intent(llm_client: LLMClient):
 
 
 async def test_classify_hybrid_intent(llm_client: LLMClient):
-    intent = await llm_client.classify_intent(
-        "Who was CEO when the company revenue peaked?"
-    )
+    intent = await llm_client.classify_intent("Who was CEO when the company revenue peaked?")
     assert intent in ("hybrid", "temporal")
 
 

@@ -24,7 +24,10 @@ def test_normalize_whitespace():
 
 
 def test_normalize_case():
-    assert EntityResolver._normalize_name("International Business Machines") == "international business machines"
+    assert (
+        EntityResolver._normalize_name("International Business Machines")
+        == "international business machines"
+    )
 
 
 def test_normalize_plain():

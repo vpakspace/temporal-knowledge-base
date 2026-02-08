@@ -51,7 +51,8 @@ class EntityResolver:
                 entity.canonical_name = existing.get("canonical_name") or existing["name"]
                 logger.debug(
                     "Resolved '%s' → '%s' (existing)",
-                    entity.name, entity.canonical_name,
+                    entity.name,
+                    entity.canonical_name,
                 )
             else:
                 entity.canonical_name = entity.name
@@ -70,9 +71,7 @@ class EntityResolver:
     async def _find_existing(self, entity: Entity) -> dict | None:
         """Find existing entity in graph by name similarity."""
         # First try exact full-text search
-        candidates = await self._neo4j.find_entities_by_name(
-            entity.name, limit=5
-        )
+        candidates = await self._neo4j.find_entities_by_name(entity.name, limit=5)
 
         if not candidates:
             return None
@@ -84,9 +83,7 @@ class EntityResolver:
                 return candidate
 
         # Fuzzy match via embeddings
-        entity_embedding = await self._vectors.embed_text(
-            f"{entity.entity_type}: {entity.name}"
-        )
+        entity_embedding = await self._vectors.embed_text(f"{entity.entity_type}: {entity.name}")
         for candidate in candidates:
             cand_embedding = await self._vectors.embed_text(
                 f"{candidate.get('entity_type', 'Concept')}: {candidate['name']}"

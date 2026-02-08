@@ -44,9 +44,7 @@ skip_no_neo4j = pytest.mark.skipif(
     not _neo4j_available(), reason="Neo4j not available at localhost:7687"
 )
 
-skip_no_openai = pytest.mark.skipif(
-    not _openai_available(), reason="OPENAI_API_KEY not configured"
-)
+skip_no_openai = pytest.mark.skipif(not _openai_available(), reason="OPENAI_API_KEY not configured")
 
 
 @pytest.fixture(scope="session")
@@ -72,9 +70,7 @@ async def neo4j_client(neo4j_settings: Neo4jSettings) -> Neo4jClient:
     yield client
     # Cleanup: remove all test data
     async with client.session() as session:
-        await session.run(
-            "MATCH (n) WHERE n.id STARTS WITH 'test-' DETACH DELETE n"
-        )
+        await session.run("MATCH (n) WHERE n.id STARTS WITH 'test-' DETACH DELETE n")
     await client.close()
 
 
