@@ -126,9 +126,14 @@ class DoclingLoader:
         # Full markdown export
         markdown = doc.export_to_markdown()
 
+        # num_pages may be a method or property depending on Docling version
+        pages = getattr(doc, "num_pages", None)
+        if callable(pages):
+            pages = pages()
+
         metadata = {
             "format": path.suffix,
-            "pages": getattr(doc, "num_pages", None),
+            "pages": pages,
             "tables_count": len(tables),
             "images_count": len(images),
         }
