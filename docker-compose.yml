@@ -21,6 +21,39 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  api:
+    build: .
+    container_name: temporal-kb-api
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  ui:
+    build: .
+    container_name: temporal-kb-ui
+    ports:
+      - "8501:8501"
+    env_file: .env
+    environment:
+      - API_BASE=http://api:8000
+    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   neo4j_data:
   neo4j_logs:

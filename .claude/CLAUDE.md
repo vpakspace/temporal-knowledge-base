@@ -285,7 +285,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | ~~6~~ | ~~Entity Explorer tab~~ | ~~2-3ч~~ | ~~DONE~~ Entities tab: table + type filter + name search + detail panel (relationships, events) |
 | 7 | Export / Import | 2ч | `GET /api/export` JSON dump, `POST /api/import` restore, кнопка Export в Stats |
 | 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |
-| 9 | Docker Compose full stack | 1ч | Добавить api + ui сервисы к существующему neo4j |
+| ~~9~~ | ~~Docker Compose full stack~~ | ~~1ч~~ | ~~DONE~~ Dockerfile + api/ui services, healthchecks, env_file |
 
 ### Низкий приоритет
 

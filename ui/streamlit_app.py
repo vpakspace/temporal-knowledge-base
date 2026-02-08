@@ -27,7 +27,7 @@ if _project_root not in sys.path:
 
 from ingestion.document_loader import DoclingLoader
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 API_KEY = os.environ.get("APP_API_KEY", "")
 
 MAX_FILE_SIZE_MB = 10
