@@ -110,6 +110,8 @@ class TestAuthEnabled:
             "/api/communities/build",
             "/api/contradictions",
             "/api/webhooks",
+            "/api/cache/stats",
+            "/api/cache/clear",
             "/api/export",
             "/api/import",
             "/api/timeline/fake-id",
@@ -121,7 +123,7 @@ class TestAuthEnabled:
             resp = client.post(path, json=[{"content": "x"}])
         elif path == "/api/import":
             resp = client.post(path, json={"version": "1.0"})
-        elif path == "/api/communities/build":
+        elif path in ("/api/communities/build", "/api/cache/clear"):
             resp = client.post(path)
         elif path.startswith("/api/ingest") and "file" not in path:
             resp = client.post(path, json={"content": "x"})

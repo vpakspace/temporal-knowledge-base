@@ -12,6 +12,7 @@ from typing import Any
 
 from openai import AsyncOpenAI
 
+from core.cache import TTLCache
 from core.config import OpenAISettings
 from core.exceptions import LLMError
 
@@ -27,6 +28,7 @@ class LLMClient:
         self._client = AsyncOpenAI(api_key=settings.api_key)
         self._model = settings.llm_model
         self._temperature = settings.llm_temperature
+        self.cache = TTLCache(ttl_seconds=600, max_size=500)
 
     async def generate(
         self,
@@ -76,7 +78,15 @@ class LLMClient:
             raise LLMError(f"LLM JSON generation failed: {e}") from e
 
     async def classify_intent(self, query: str) -> str:
-        """Classify query intent: structural, temporal, or hybrid."""
+        """Classify query intent: structural, temporal, or hybrid.
+
+        Results are cached because the same query always produces the same intent.
+        """
+        cache_key = TTLCache._hash_key("classify_intent", query)
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         system = (
             "You classify user queries into exactly one category.\n"
             "Respond with ONLY one word: structural, temporal, or hybrid.\n\n"
@@ -90,7 +100,8 @@ class LLMClient:
         result = await self.generate(query, system=system)
         intent = result.strip().lower()
         if intent not in ("structural", "temporal", "hybrid"):
-            return "hybrid"
+            intent = "hybrid"
+        self.cache.set(cache_key, intent)
         return intent
 
     async def check_contradiction(self, existing_fact: str, new_fact: str) -> dict[str, Any]:

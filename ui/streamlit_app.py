@@ -657,6 +657,44 @@ with tab_stats:
 
     st.divider()
 
+    # --- Cache Stats ---
+    st.subheader("Cache Statistics")
+    st.caption("In-memory TTL cache for OpenAI API calls (LLM intent classification, embeddings)")
+
+    col_cache, col_clear = st.columns([3, 1])
+    with col_cache:
+        if st.button("Refresh Cache Stats"):
+            result = api_call("GET", "/api/cache/stats")
+            if result and result.get("success"):
+                data = result["data"]
+                llm_stats = data.get("llm", {})
+                emb_stats = data.get("embeddings", {})
+
+                lc, ec = st.columns(2)
+                with lc:
+                    st.markdown("**LLM Cache** (intent classification)")
+                    st.metric("Entries", llm_stats.get("size", 0))
+                    st.metric("Hit Rate", f"{llm_stats.get('hit_rate_pct', 0)}%")
+                    st.caption(
+                        f"Hits: {llm_stats.get('hits', 0)}, "
+                        f"Misses: {llm_stats.get('misses', 0)}"
+                    )
+                with ec:
+                    st.markdown("**Embedding Cache**")
+                    st.metric("Entries", emb_stats.get("size", 0))
+                    st.metric("Hit Rate", f"{emb_stats.get('hit_rate_pct', 0)}%")
+                    st.caption(
+                        f"Hits: {emb_stats.get('hits', 0)}, "
+                        f"Misses: {emb_stats.get('misses', 0)}"
+                    )
+    with col_clear:
+        if st.button("Clear Caches"):
+            result = api_call("POST", "/api/cache/clear")
+            if result and result.get("success"):
+                st.success("Caches cleared")
+
+    st.divider()
+
     # --- Export ---
     st.subheader("Export / Import")
 

@@ -9,6 +9,8 @@ Endpoints:
 - GET  /api/evolution/{event_id} — Get fact evolution chain
 - GET  /api/entities   — List all entities
 - GET  /api/graph      — Get graph data for visualization
+- GET  /api/cache/stats — Cache hit/miss statistics
+- POST /api/cache/clear — Clear all caches
 - GET  /api/stats      — Graph statistics
 - GET  /health         — Health check
 """
@@ -85,6 +87,8 @@ async def lifespan(app: FastAPI):
     _state["query_engine"] = query_engine
     _state["response_builder"] = response_builder
     _state["doc_loader"] = DoclingLoader()
+    _state["llm"] = llm
+    _state["vector_store"] = vector_store
 
     logger.info("Temporal Knowledge Base API started")
     yield
@@ -482,6 +486,30 @@ async def import_graph(data: dict):
     except Exception as e:
         logger.exception("Import failed")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/cache/stats", dependencies=_auth)
+async def get_cache_stats():
+    """Get cache hit/miss statistics for LLM and embedding caches."""
+    llm: LLMClient = _state["llm"]
+    vs: VectorStore = _state["vector_store"]
+    return {
+        "success": True,
+        "data": {
+            "llm": llm.cache.stats(),
+            "embeddings": vs.cache.stats(),
+        },
+    }
+
+
+@app.post("/api/cache/clear", dependencies=_auth)
+async def clear_caches():
+    """Clear all caches."""
+    llm: LLMClient = _state["llm"]
+    vs: VectorStore = _state["vector_store"]
+    llm.cache.clear()
+    vs.cache.clear()
+    return {"success": True}
 
 
 @app.get("/api/stats", dependencies=_auth)

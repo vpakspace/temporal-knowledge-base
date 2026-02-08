@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 114 unit + 30 integration = 144 total
+**Тесты**: 116 unit + 30 integration = 146 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -57,7 +57,7 @@ Layers 6-7:  Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
 
 | Модуль | Описание |
 |--------|----------|
-| `core/` | Config (pydantic-settings), models (13 Pydantic), exceptions |
+| `core/` | Config (pydantic-settings), models (13 Pydantic), exceptions, TTL cache, webhooks |
 | `storage/` | Neo4j async client (bi-temporal CRUD, point-in-time), vector store |
 | `graphiti_adapter/` | Graphiti client wrapper, search recipes (RRF/MMR) |
 | `ingestion/` | Pipeline (5 stages), semantic chunker (table-aware), dual-track extractor, DoclingLoader |
@@ -103,6 +103,8 @@ docker compose up -d
 | GET | `/api/webhooks` | List registered webhooks |
 | POST | `/api/webhooks` | Register webhook URL |
 | DELETE | `/api/webhooks?url=` | Remove webhook |
+| GET | `/api/cache/stats` | Cache hit/miss statistics (LLM + embeddings) |
+| POST | `/api/cache/clear` | Clear all caches |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
 
@@ -304,7 +306,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | ~~10~~ | ~~Community Detection~~ | ~~DONE~~ Graphiti `build_communities` + lightweight BFS clusters, `/api/communities`, Graph tab UI |
 | ~~11~~ | ~~Webhook Notifications~~ | ~~DONE~~ `core/webhooks.py`, auto-fire on supersession, CRUD API, UI в Stats tab |
 | 12 | Multi-language Hints | Расширить temporal_hints.py |
-| 13 | Caching Layer | Кеш OpenAI вызовов (intent classification, response generation) |
+| ~~13~~ | ~~Caching Layer~~ | ~~DONE~~ TTLCache for LLM intent + embeddings, `/api/cache/stats`, UI stats |
 | 14 | Metrics / Monitoring | Prometheus или Phoenix MCP tracing |
 
 ### Рекомендуемый порядок
