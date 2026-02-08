@@ -106,6 +106,7 @@ class TestAuthEnabled:
             "/api/entities",
             "/api/entities/fake-id",
             "/api/graph",
+            "/api/contradictions",
             "/api/export",
             "/api/import",
             "/api/timeline/fake-id",

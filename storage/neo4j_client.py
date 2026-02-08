@@ -422,6 +422,66 @@ class Neo4jClient:
 
         return {"nodes": nodes, "edges": edges}
 
+    # --- Contradictions ---
+
+    async def get_contradictions(self) -> dict[str, Any]:
+        """Get all supersession chains grouped by root event, with entity hotspots."""
+        # All supersession chains (old → new)
+        chains_q = """
+        MATCH (old:TemporalEvent)-[:SUPERSEDED_BY]->(new:TemporalEvent)
+        OPTIONAL MATCH (old)-[:MENTIONS]->(e:Entity)
+        WITH old, new, collect(DISTINCT e.name) AS entities
+        RETURN old.id AS old_id,
+               old.statement AS old_statement,
+               old.valid_at AS old_valid_at,
+               old.invalid_at AS old_invalid_at,
+               new.id AS new_id,
+               new.statement AS new_statement,
+               new.valid_at AS new_valid_at,
+               new.is_current AS new_is_current,
+               entities
+        ORDER BY old.invalid_at DESC
+        """
+        # Entity hotspots: entities with most superseded facts
+        hotspots_q = """
+        MATCH (te:TemporalEvent)-[:SUPERSEDED_BY]->(:TemporalEvent)
+        MATCH (te)-[:MENTIONS]->(e:Entity)
+        WITH e.id AS entity_id, e.name AS entity_name, e.entity_type AS entity_type,
+             count(te) AS superseded_count
+        WHERE superseded_count > 0
+        RETURN entity_id, entity_name, entity_type, superseded_count
+        ORDER BY superseded_count DESC
+        LIMIT 20
+        """
+        # Recent invalidation log
+        log_q = """
+        MATCH (te:TemporalEvent)
+        WHERE te.invalid_at IS NOT NULL
+        OPTIONAL MATCH (te)-[:SUPERSEDED_BY]->(newer:TemporalEvent)
+        OPTIONAL MATCH (te)-[:MENTIONS]->(e:Entity)
+        WITH te, newer, collect(DISTINCT e.name) AS entities
+        RETURN te.id AS id,
+               te.statement AS statement,
+               te.valid_at AS valid_at,
+               te.invalid_at AS invalid_at,
+               newer.id AS replaced_by_id,
+               newer.statement AS replaced_by,
+               entities
+        ORDER BY te.invalid_at DESC
+        LIMIT 50
+        """
+        async with self.session() as session:
+            res = await session.run(chains_q)
+            chains = [dict(r) async for r in res]
+
+            res = await session.run(hotspots_q)
+            hotspots = [dict(r) async for r in res]
+
+            res = await session.run(log_q)
+            log = [dict(r) async for r in res]
+
+        return {"chains": chains, "hotspots": hotspots, "invalidation_log": log}
+
     # --- Export ---
 
     async def export_all(self) -> dict[str, Any]:

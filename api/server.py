@@ -387,6 +387,17 @@ async def get_graph():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/contradictions", dependencies=_auth)
+async def get_contradictions():
+    """Get supersession chains, entity hotspots, and invalidation log."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        data = await neo4j.get_contradictions()
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/export", dependencies=_auth)
 async def export_graph():
     """Export full graph data as JSON."""

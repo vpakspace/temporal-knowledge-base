@@ -1,12 +1,13 @@
 """Streamlit UI for Temporal Knowledge Base.
 
 Tabs:
-1. Ingest   — Add episodes (text, JSON, documents, file upload)
-2. Search   — Temporal-aware search with intent classification
-3. Entities — Entity explorer with filters, search, drill-down
-4. Timeline — Entity timelines and fact evolution
-5. Graph    — Interactive knowledge graph visualization
-6. Stats    — Graph statistics and overview
+1. Ingest         — Add episodes (text, JSON, documents, file upload)
+2. Search         — Temporal-aware search with intent classification
+3. Entities       — Entity explorer with filters, search, drill-down
+4. Timeline       — Entity timelines and fact evolution
+5. Graph          — Interactive knowledge graph visualization
+6. Contradictions — Supersession chains, hotspots, invalidation log
+7. Stats          — Graph statistics, export/import
 """
 
 from __future__ import annotations
@@ -108,8 +109,8 @@ def _fetch_entities() -> list[dict]:
 
 
 # --- Tabs ---
-tab_ingest, tab_search, tab_entities, tab_timeline, tab_graph, tab_stats = st.tabs(
-    ["Ingest", "Search", "Entities", "Timeline", "Graph", "Stats"]
+tab_ingest, tab_search, tab_entities, tab_timeline, tab_graph, tab_contra, tab_stats = st.tabs(
+    ["Ingest", "Search", "Entities", "Timeline", "Graph", "Contradictions", "Stats"]
 )
 
 # --- Tab 1: Ingest ---
@@ -503,7 +504,85 @@ with tab_graph:
                             )
 
 
-# --- Tab 6: Stats ---
+# --- Tab 6: Contradictions ---
+with tab_contra:
+    st.header("Contradiction Dashboard")
+    st.caption("Supersession chains, entity hotspots, and invalidation log")
+
+    if st.button("Load Contradictions"):
+        with st.spinner("Loading contradiction data..."):
+            result = api_call("GET", "/api/contradictions")
+            if result and result.get("success"):
+                cdata = result["data"]
+                chains = cdata.get("chains", [])
+                hotspots = cdata.get("hotspots", [])
+                log = cdata.get("invalidation_log", [])
+
+                # --- Summary metrics ---
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Supersession Chains", len(chains))
+                c2.metric("Entity Hotspots", len(hotspots))
+                c3.metric("Invalidated Facts", len(log))
+
+                # --- Entity Hotspots ---
+                if hotspots:
+                    st.subheader("Entity Hotspots")
+                    st.caption("Entities with the most superseded facts")
+                    import pandas as pd
+
+                    df_hot = pd.DataFrame(hotspots)
+                    df_hot.columns = ["ID", "Name", "Type", "Superseded Facts"]
+                    st.dataframe(
+                        df_hot[["Name", "Type", "Superseded Facts"]],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                # --- Supersession Chains ---
+                if chains:
+                    st.subheader("Supersession Chains")
+                    st.caption("Old facts replaced by new facts")
+                    for ch in chains:
+                        entities_str = ", ".join(ch.get("entities", [])) or "—"
+                        is_current = ch.get("new_is_current", False)
+                        status_icon = "🟢" if is_current else "🔄"
+                        with st.expander(
+                            f"{status_icon} {entities_str}: "
+                            f"{(ch.get('old_statement') or '')[:80]}",
+                            expanded=False,
+                        ):
+                            st.markdown("**Old (superseded):**")
+                            st.markdown(
+                                f"> {ch.get('old_statement', '—')}\n\n"
+                                f"Valid: `{ch.get('old_valid_at', '?')}` | "
+                                f"Invalidated: `{ch.get('old_invalid_at', '—')}`"
+                            )
+                            st.markdown("**New (replacement):**")
+                            st.markdown(
+                                f"> {ch.get('new_statement', '—')}\n\n"
+                                f"Valid: `{ch.get('new_valid_at', '?')}` | "
+                                f"Current: {'Yes' if is_current else 'No'}"
+                            )
+                else:
+                    st.info("No supersession chains found. All facts are current.")
+
+                # --- Invalidation Log ---
+                if log:
+                    st.subheader("Invalidation Log")
+                    st.caption("Recent fact invalidations (newest first)")
+                    for entry in log:
+                        entities_str = ", ".join(entry.get("entities", [])) or "—"
+                        replaced_by = entry.get("replaced_by")
+                        st.markdown(
+                            f"- **{(entry.get('statement') or '—')[:100]}**\n"
+                            f"  - Entities: {entities_str}\n"
+                            f"  - Valid: `{entry.get('valid_at', '?')}` → "
+                            f"Invalidated: `{entry.get('invalid_at', '—')}`\n"
+                            f"  - Replaced by: {replaced_by or '(no replacement)'}"
+                        )
+
+
+# --- Tab 7: Stats ---
 with tab_stats:
     st.header("Graph Statistics")
 

@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 110 unit + 30 integration = 140 total
+**Тесты**: 111 unit + 30 integration = 141 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -95,6 +95,7 @@ docker compose up -d
 | GET | `/api/entities` | Список всех entities (для autocomplete) |
 | GET | `/api/entities/{entity_id}` | Детали entity (relationships, event counts) |
 | GET | `/api/graph` | Nodes + edges для визуализации графа |
+| GET | `/api/contradictions` | Supersession chains, hotspots, invalidation log |
 | GET | `/api/export` | Export full graph data as JSON |
 | POST | `/api/import` | Import graph data from JSON export (MERGE by ID) |
 | GET | `/api/stats` | Статистика графа |
@@ -214,14 +215,15 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 - `extract_temporal_hint(question)` → regex рус/англ date extraction
 - Used by: `mcp_server.py` (backward-compat wrapper), `api/server.py` (direct import)
 
-### Streamlit UI Features (5 tabs)
+### Streamlit UI Features (7 tabs)
 
-- **Ingest tab**: paste text OR file upload (TXT/MD/JSON/PDF/DOCX/PPTX/XLSX/HTML, max 10MB)
+- **Ingest tab**: paste text, batch JSON, OR file upload (TXT/MD/JSON/PDF/DOCX/PPTX/XLSX/HTML, max 10MB)
 - **Search tab**: calls `/api/ask` with auto temporal hints
 - **Entities tab**: entity table with type filter, name search, detail panel (relationships, events)
 - **Timeline tab**: entity autocomplete dropdown + fact evolution chains
 - **Graph tab**: interactive knowledge graph visualization (`streamlit-agraph`, color-coded by entity type)
-- **Stats tab**: graph statistics (entities, events, episodes)
+- **Contradictions tab**: supersession chains, entity hotspots (most contradicted), invalidation log
+- **Stats tab**: graph statistics, export/import (JSON download + upload)
 
 **File upload pipeline**: `st.file_uploader → DoclingLoader.load_bytes() → /api/ingest`
 - PDF/DOCX/PPTX/XLSX/HTML: IBM Docling (tables, images, OCR)
@@ -287,7 +289,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | ~~5~~ | ~~Batch Ingestion~~ | ~~2ч~~ | ~~DONE~~ `POST /api/ingest/batch`, per-episode errors, Batch JSON tab in UI |
 | ~~6~~ | ~~Entity Explorer tab~~ | ~~2-3ч~~ | ~~DONE~~ Entities tab: table + type filter + name search + detail panel (relationships, events) |
 | ~~7~~ | ~~Export / Import~~ | ~~2ч~~ | ~~DONE~~ `GET /api/export`, `POST /api/import` (MERGE by ID), Export/Import UI в Stats tab |
-| 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |
+| ~~8~~ | ~~Contradiction Dashboard~~ | ~~2ч~~ | ~~DONE~~ Contradictions tab: chains, entity hotspots, invalidation log + `/api/contradictions` |
 | ~~9~~ | ~~Docker Compose full stack~~ | ~~1ч~~ | ~~DONE~~ Dockerfile + api/ui services, healthchecks, env_file |
 
 ### Низкий приоритет
