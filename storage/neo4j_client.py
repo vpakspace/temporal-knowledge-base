@@ -356,6 +356,49 @@ class Neo4jClient:
             result = await session.run(query, limit=limit)
             return [dict(record) async for record in result]
 
+    async def get_entity_details(self, entity_id: str) -> dict[str, Any] | None:
+        """Get entity with its relationships and event counts."""
+        query = """
+        MATCH (e:Entity {id: $entity_id})
+        OPTIONAL MATCH (e)<-[:MENTIONS]-(te:TemporalEvent)
+        WITH e,
+             count(te) AS total_events,
+             count(CASE WHEN te.is_current = true THEN 1 END) AS current_events
+        OPTIONAL MATCH (e)-[r:RELATES_TO]->(other:Entity)
+        WITH e, total_events, current_events,
+             collect(DISTINCT {
+                id: r.id,
+                relation_type: r.relation_type,
+                target_id: other.id,
+                target_name: other.name,
+                direction: 'outgoing'
+             }) AS outgoing
+        OPTIONAL MATCH (e)<-[r2:RELATES_TO]-(other2:Entity)
+        RETURN e.id AS id, e.name AS name,
+               e.entity_type AS entity_type,
+               e.canonical_name AS canonical_name,
+               e.valid_at AS valid_at,
+               e.created_at AS created_at,
+               total_events, current_events,
+               outgoing +
+               collect(DISTINCT {
+                id: r2.id,
+                relation_type: r2.relation_type,
+                target_id: other2.id,
+                target_name: other2.name,
+                direction: 'incoming'
+               }) AS relationships
+        """
+        async with self.session() as session:
+            result = await session.run(query, entity_id=entity_id)
+            record = await result.single()
+            if not record:
+                return None
+            data = dict(record)
+            # Filter out empty relationship entries (from OPTIONAL MATCH)
+            data["relationships"] = [r for r in data.get("relationships", []) if r.get("target_id")]
+            return data
+
     async def get_graph_data(self, limit: int = 100) -> dict[str, Any]:
         """Get entities and relationships for graph visualization."""
         nodes_query = """

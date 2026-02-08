@@ -103,6 +103,7 @@ class TestAuthEnabled:
             "/api/ask",
             "/api/stats",
             "/api/entities",
+            "/api/entities/fake-id",
             "/api/graph",
             "/api/timeline/fake-id",
             "/api/evolution/fake-id",

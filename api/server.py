@@ -323,6 +323,21 @@ async def list_entities():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/entities/{entity_id}", dependencies=_auth)
+async def get_entity_details(entity_id: str):
+    """Get entity details with relationships and event counts."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        details = await neo4j.get_entity_details(entity_id)
+        if not details:
+            raise HTTPException(status_code=404, detail="Entity not found")
+        return {"success": True, "data": details}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/graph", dependencies=_auth)
 async def get_graph():
     """Get graph data (nodes + edges) for visualization."""

@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Latest commit**: `b15fffd`
-**Тесты**: 106 unit + 30 integration = 136 total
+**Тесты**: 107 unit + 30 integration = 137 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -92,6 +92,7 @@ docker compose up -d
 | GET | `/api/timeline/{entity_id}` | Timeline сущности |
 | GET | `/api/evolution/{event_id}` | Цепочка SUPERSEDED_BY |
 | GET | `/api/entities` | Список всех entities (для autocomplete) |
+| GET | `/api/entities/{entity_id}` | Детали entity (relationships, event counts) |
 | GET | `/api/graph` | Nodes + edges для визуализации графа |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
@@ -214,6 +215,7 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 
 - **Ingest tab**: paste text OR file upload (TXT/MD/JSON/PDF/DOCX/PPTX/XLSX/HTML, max 10MB)
 - **Search tab**: calls `/api/ask` with auto temporal hints
+- **Entities tab**: entity table with type filter, name search, detail panel (relationships, events)
 - **Timeline tab**: entity autocomplete dropdown + fact evolution chains
 - **Graph tab**: interactive knowledge graph visualization (`streamlit-agraph`, color-coded by entity type)
 - **Stats tab**: graph statistics (entities, events, episodes)
@@ -280,7 +282,7 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 | # | Задача | Усилие | Описание |
 |---|--------|--------|----------|
 | 5 | Batch Ingestion | 2ч | `POST /api/ingest/batch` (массив), `POST /api/ingest/directory`, progress bar в Streamlit |
-| 6 | Entity Explorer tab | 2-3ч | 5-я вкладка: таблица entities с фильтрами, поиск по имени, связи, drill-down в timeline |
+| ~~6~~ | ~~Entity Explorer tab~~ | ~~2-3ч~~ | ~~DONE~~ Entities tab: table + type filter + name search + detail panel (relationships, events) |
 | 7 | Export / Import | 2ч | `GET /api/export` JSON dump, `POST /api/import` restore, кнопка Export в Stats |
 | 8 | Contradiction Dashboard | 2ч | UI для supersession chains, highlight conflict zones, лог invalidation events |
 | 9 | Docker Compose full stack | 1ч | Добавить api + ui сервисы к существующему neo4j |

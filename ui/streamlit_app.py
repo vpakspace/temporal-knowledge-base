@@ -1,10 +1,12 @@
 """Streamlit UI for Temporal Knowledge Base.
 
 Tabs:
-1. Ingest  — Add episodes (text, JSON, documents, file upload)
-2. Search  — Temporal-aware search with intent classification
-3. Timeline — Entity timelines and fact evolution
-4. Stats   — Graph statistics and overview
+1. Ingest   — Add episodes (text, JSON, documents, file upload)
+2. Search   — Temporal-aware search with intent classification
+3. Entities — Entity explorer with filters, search, drill-down
+4. Timeline — Entity timelines and fact evolution
+5. Graph    — Interactive knowledge graph visualization
+6. Stats    — Graph statistics and overview
 """
 
 from __future__ import annotations
@@ -106,8 +108,8 @@ def _fetch_entities() -> list[dict]:
 
 
 # --- Tabs ---
-tab_ingest, tab_search, tab_timeline, tab_graph, tab_stats = st.tabs(
-    ["Ingest", "Search", "Timeline", "Graph", "Stats"]
+tab_ingest, tab_search, tab_entities, tab_timeline, tab_graph, tab_stats = st.tabs(
+    ["Ingest", "Search", "Entities", "Timeline", "Graph", "Stats"]
 )
 
 # --- Tab 1: Ingest ---
@@ -248,7 +250,99 @@ with tab_search:
                         icon = "✅" if item.get("is_current") else "❌"
                         st.markdown(f"{icon} **{item['date']}**: {item['fact']}")
 
-# --- Tab 3: Timeline ---
+# --- Tab 3: Entities ---
+with tab_entities:
+    st.header("Entity Explorer")
+
+    entities = _fetch_entities()
+
+    if not entities:
+        st.info("No entities yet. Ingest some data first.")
+    else:
+        # Filters
+        col_search, col_type = st.columns([2, 1])
+        with col_search:
+            name_filter = st.text_input(
+                "Search by name",
+                placeholder="Type to filter...",
+                key="entity_search",
+            )
+        with col_type:
+            all_types = sorted({e.get("entity_type", "unknown") for e in entities})
+            type_filter = st.multiselect("Filter by type", all_types, key="entity_type_filter")
+
+        # Apply filters
+        filtered = entities
+        if name_filter:
+            q = name_filter.lower()
+            filtered = [e for e in filtered if q in e.get("name", "").lower()]
+        if type_filter:
+            filtered = [e for e in filtered if e.get("entity_type") in type_filter]
+
+        st.caption(f"{len(filtered)} of {len(entities)} entities")
+
+        # Entity table
+        if filtered:
+            import pandas as pd
+
+            df = pd.DataFrame(
+                [
+                    {
+                        "Name": e.get("name", ""),
+                        "Type": e.get("entity_type", ""),
+                        "ID": e.get("id", ""),
+                    }
+                    for e in filtered
+                ]
+            )
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # Entity details
+            st.divider()
+            st.subheader("Entity Details")
+
+            detail_options = {
+                f"{e['name']} ({e.get('entity_type', '?')})": e["id"] for e in filtered
+            }
+            selected = st.selectbox(
+                "Select entity to inspect",
+                options=[""] + list(detail_options.keys()),
+                index=0,
+                key="entity_detail_select",
+            )
+
+            if selected:
+                eid = detail_options[selected]
+                with st.spinner("Loading details..."):
+                    result = api_call("GET", f"/api/entities/{eid}")
+                    if result and result.get("success"):
+                        d = result["data"]
+
+                        # Metrics
+                        c1, c2, c3 = st.columns(3)
+                        c1.metric("Total Events", d.get("total_events", 0))
+                        c2.metric("Current Events", d.get("current_events", 0))
+                        c3.metric("Relationships", len(d.get("relationships", [])))
+
+                        # Info
+                        st.markdown(f"**Canonical name**: {d.get('canonical_name', '-')}")
+                        if d.get("valid_at"):
+                            st.markdown(f"**Valid at**: {d['valid_at']}")
+
+                        # Relationships table
+                        rels = d.get("relationships", [])
+                        if rels:
+                            st.subheader("Relationships")
+                            for r in rels:
+                                direction = "<-" if r.get("direction") == "incoming" else "->"
+                                st.markdown(
+                                    f"- {direction} **{r.get('relation_type', '?')}** "
+                                    f"{direction} {r.get('target_name', r.get('target_id', '?')[:8])}"
+                                )
+                        else:
+                            st.info("No relationships found")
+
+# --- Tab 4: Timeline ---
 with tab_timeline:
     st.header("Entity Timeline")
 
@@ -300,7 +394,7 @@ with tab_timeline:
                         f"Invalid: {ev.get('invalid_at', '-')}"
                     )
 
-# --- Tab 4: Graph ---
+# --- Tab 5: Graph ---
 with tab_graph:
     st.header("Knowledge Graph")
 
@@ -377,7 +471,7 @@ with tab_graph:
                             )
 
 
-# --- Tab 5: Stats ---
+# --- Tab 6: Stats ---
 with tab_stats:
     st.header("Graph Statistics")
 
