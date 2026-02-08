@@ -139,16 +139,38 @@ async def get_state() -> _State:
 
 
 async def _tkb_ingest_impl(
-    content: str,
+    content: str = "",
     source: str = "manual",
     episode_type: str = "text",
     reference_time: str | None = None,
     group_id: str | None = None,
+    file_path: str | None = None,
 ) -> dict[str, Any]:
     """Ingest an episode into the temporal knowledge graph."""
     from core.models import EpisodeType
 
     state = await get_state()
+
+    # If file_path provided, extract content via Docling
+    doc_metadata: dict[str, Any] | None = None
+    if file_path:
+        from ingestion.document_loader import DoclingLoader
+
+        loader = DoclingLoader()
+        doc_result = loader.load(file_path)
+        content = doc_result.markdown
+        source = source if source != "manual" else file_path
+        episode_type = "document"
+        doc_metadata = {
+            "docling": True,
+            "tables_count": doc_result.metadata.get("tables_count", 0),
+            "images_count": doc_result.metadata.get("images_count", 0),
+            "pages": doc_result.metadata.get("pages"),
+            "format": doc_result.metadata.get("format"),
+        }
+
+    if not content:
+        return {"error": "No content provided. Supply content or file_path."}
 
     try:
         ep_type = EpisodeType(episode_type)
@@ -168,6 +190,7 @@ async def _tkb_ingest_impl(
         episode_type=ep_type,
         reference_time=ref_time,
         group_id=group_id,
+        metadata=doc_metadata,
     )
     return result
 
@@ -326,23 +349,28 @@ mcp = FastMCP("TemporalKnowledgeBase")
 
 @mcp.tool()
 async def tkb_ingest(
-    content: str,
+    content: str = "",
     source: str = "manual",
     episode_type: str = "text",
     reference_time: str | None = None,
     group_id: str | None = None,
+    file_path: str | None = None,
 ) -> dict[str, Any]:
     """Add an episode to the temporal knowledge graph.
 
     Runs the full 5-stage pipeline: chunk → extract entities/events →
     resolve → store in Neo4j → run invalidation agent.
 
+    If file_path is provided, extracts content from the document via Docling
+    (supports PDF, DOCX, PPTX, XLSX, HTML, TXT, MD).
+
     Args:
-        content: Text content to ingest
+        content: Text content to ingest (optional if file_path is provided)
         source: Source identifier (e.g. document name, URL)
         episode_type: One of: text, json, chat, document
         reference_time: ISO datetime when the content was created (optional)
         group_id: Group/namespace for organizing episodes (optional)
+        file_path: Path to a local document file to extract and ingest (optional)
     """
     return await _tkb_ingest_impl(
         content=content,
@@ -350,6 +378,7 @@ async def tkb_ingest(
         episode_type=episode_type,
         reference_time=reference_time,
         group_id=group_id,
+        file_path=file_path,
     )
 
 

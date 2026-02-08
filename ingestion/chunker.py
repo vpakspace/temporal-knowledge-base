@@ -27,24 +27,63 @@ class SemanticChunker:
         """Split text into semantic chunks.
 
         Strategy:
-        1. Split on paragraph boundaries first
-        2. If paragraphs are too large, split on sentence boundaries
-        3. Merge small chunks to meet minimum size
+        1. Split into blocks preserving markdown tables as atomic units
+        2. Split non-table blocks on paragraph boundaries
+        3. If paragraphs are too large, split on sentence boundaries
+        4. Merge small chunks to meet minimum size
         """
         if len(text) <= self._max_size:
             return [text.strip()] if text.strip() else []
 
-        paragraphs = self._split_paragraphs(text)
+        # First, split preserving tables as atomic units
+        blocks = self._split_preserving_tables(text)
         chunks: list[str] = []
 
-        for para in paragraphs:
-            if len(para) <= self._max_size:
-                chunks.append(para)
+        for block in blocks:
+            if self._is_table(block):
+                # Tables are atomic — never split them
+                chunks.append(block)
+            elif len(block) <= self._max_size:
+                chunks.append(block)
             else:
-                sentences = self._split_sentences(para)
-                chunks.extend(self._merge_sentences(sentences))
+                paragraphs = self._split_paragraphs(block)
+                for para in paragraphs:
+                    if len(para) <= self._max_size:
+                        chunks.append(para)
+                    else:
+                        sentences = self._split_sentences(para)
+                        chunks.extend(self._merge_sentences(sentences))
 
         return self._merge_small_chunks(chunks)
+
+    def _split_preserving_tables(self, text: str) -> list[str]:
+        """Split text into blocks, preserving markdown tables as atomic units.
+
+        A markdown table is a contiguous block of lines starting with |.
+        Tables are never split across chunks.
+        """
+        table_pattern = re.compile(r"((?:^\|.*\|$\n?)+)", re.MULTILINE)
+
+        parts: list[str] = []
+        last_end = 0
+        for match in table_pattern.finditer(text):
+            before = text[last_end : match.start()].strip()
+            if before:
+                parts.append(before)
+            parts.append(match.group(0).strip())
+            last_end = match.end()
+
+        after = text[last_end:].strip()
+        if after:
+            parts.append(after)
+
+        return parts if parts else [text.strip()]
+
+    @staticmethod
+    def _is_table(text: str) -> bool:
+        """Check if text block is a markdown table."""
+        lines = text.strip().split("\n")
+        return len(lines) >= 2 and all(line.strip().startswith("|") for line in lines)
 
     def _split_paragraphs(self, text: str) -> list[str]:
         """Split on double newlines (paragraph boundaries)."""

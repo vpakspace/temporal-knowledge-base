@@ -10,10 +10,13 @@ openai>=1.0.0
 # API
 fastapi>=0.100.0
 uvicorn[standard]>=0.20.0
+python-multipart>=0.0.6
 
 # UI
 streamlit>=1.30.0
-pypdf>=4.0.0
+
+# Document processing
+docling>=2.0.0
 
 # Utilities
 python-dotenv>=1.0.0

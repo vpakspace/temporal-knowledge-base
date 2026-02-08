@@ -33,22 +33,25 @@ TOOLS = [
             "Add an episode to the temporal knowledge graph.\n\n"
             "Runs the full 5-stage pipeline: chunk → extract entities/events →\n"
             "resolve → store in Neo4j → run invalidation agent.\n\n"
+            "If file_path is provided, extracts content from the document via Docling\n"
+            "(supports PDF, DOCX, PPTX, XLSX, HTML, TXT, MD).\n\n"
             "Args:\n"
-            "    content: Text content to ingest\n"
+            "    content: Text content to ingest (optional if file_path is provided)\n"
             "    source: Source identifier (e.g. document name, URL)\n"
             "    episode_type: One of: text, json, chat, document\n"
             "    reference_time: ISO datetime when the content was created (optional)\n"
-            "    group_id: Group/namespace for organizing episodes (optional)"
+            "    group_id: Group/namespace for organizing episodes (optional)\n"
+            "    file_path: Path to a local document file to extract and ingest (optional)"
         ),
         "inputSchema": {
             "properties": {
-                "content": {"type": "string"},
+                "content": {"default": "", "type": "string"},
                 "source": {"default": "manual", "type": "string"},
                 "episode_type": {"default": "text", "type": "string"},
                 "reference_time": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
                 "group_id": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
+                "file_path": {"anyOf": [{"type": "string"}, {"type": "null"}], "default": None},
             },
-            "required": ["content"],
             "type": "object",
         },
     },

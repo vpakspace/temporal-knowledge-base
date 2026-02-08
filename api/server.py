@@ -17,10 +17,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from core.config import get_settings
+from ingestion.document_loader import DoclingLoader
 from generation.llm_client import LLMClient
 from generation.response_builder import ResponseBuilder
 from generation.temporal_verifier import TemporalVerifier
@@ -74,6 +75,7 @@ async def lifespan(app: FastAPI):
     _state["pipeline"] = pipeline
     _state["query_engine"] = query_engine
     _state["response_builder"] = response_builder
+    _state["doc_loader"] = DoclingLoader()
 
     logger.info("Temporal Knowledge Base API started")
     yield
@@ -144,6 +146,68 @@ async def ingest_episode(req: IngestRequest):
             group_id=req.group_id,
         )
         return {"success": True, "data": result}
+    except Exception as e:
+        logger.exception("Ingest failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ingest/file")
+async def ingest_file(
+    file: UploadFile = File(...),
+    source: str = Form(None),
+    reference_time: str = Form(None),
+    group_id: str = Form(None),
+):
+    """Upload and ingest a document via Docling.
+
+    Supports PDF, DOCX, PPTX, XLSX, HTML, TXT, MD.
+    Extracts text (including tables) and runs through the ingestion pipeline.
+    """
+    pipeline: IngestionPipeline = _state["pipeline"]
+    doc_loader: DoclingLoader = _state["doc_loader"]
+
+    data = await file.read()
+    try:
+        doc_result = doc_loader.load_bytes(data, file.filename or "upload")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Document processing failed")
+        raise HTTPException(status_code=500, detail=f"Document processing failed: {e}")
+
+    if not doc_result.markdown.strip():
+        raise HTTPException(status_code=400, detail="Document has no extractable text")
+
+    ref_time = None
+    if reference_time:
+        try:
+            ref_time = datetime.fromisoformat(reference_time)
+        except ValueError:
+            ref_time = None
+
+    # Enrich episode metadata with document info
+    episode_metadata = {
+        "docling": True,
+        "tables_count": doc_result.metadata.get("tables_count", 0),
+        "images_count": doc_result.metadata.get("images_count", 0),
+        "pages": doc_result.metadata.get("pages"),
+        "format": doc_result.metadata.get("format"),
+    }
+
+    try:
+        result = await pipeline.ingest_episode(
+            content=doc_result.markdown,
+            source=source or file.filename or "file_upload",
+            episode_type=EpisodeType.DOCUMENT,
+            reference_time=ref_time or datetime.now(UTC),
+            group_id=group_id,
+            metadata=episode_metadata,
+        )
+        return {
+            "success": True,
+            "data": result,
+            "document_stats": doc_result.metadata,
+        }
     except Exception as e:
         logger.exception("Ingest failed")
         raise HTTPException(status_code=500, detail=str(e))

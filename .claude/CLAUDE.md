@@ -10,7 +10,7 @@
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
 **Commit**: `dba99d4`
-**Тесты**: 63 passed (33 unit + 30 integration)
+**Тесты**: 83 unit + 30 integration = 113 total
 
 ## Технологический стек
 
@@ -21,6 +21,7 @@
 - **FastAPI** (API сервер, порт 8000)
 - **Streamlit** (UI, порт 8501)
 - **Pydantic v2** (модели данных)
+- **IBM Docling** (document processing: PDF, DOCX, PPTX, XLSX, HTML — tables, images, OCR)
 
 ## Архитектура
 
@@ -58,13 +59,13 @@ Layers 6-7:  Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
 | `core/` | Config (pydantic-settings), models (13 Pydantic), exceptions |
 | `storage/` | Neo4j async client (bi-temporal CRUD, point-in-time), vector store |
 | `graphiti_adapter/` | Graphiti client wrapper, search recipes (RRF/MMR) |
-| `ingestion/` | Pipeline (5 stages), semantic chunker, dual-track extractor |
+| `ingestion/` | Pipeline (5 stages), semantic chunker (table-aware), dual-track extractor, DoclingLoader |
 | `temporal/` | Invalidation agent, entity resolution |
 | `retrieval/` | Query engine (intent-aware search) |
 | `generation/` | LLM client, temporal verifier (Layer 14), response builder |
-| `api/` | FastAPI server (6 endpoints) |
+| `api/` | FastAPI server (8 endpoints) |
 | `ui/` | Streamlit UI (4 tabs: Ingest, Search, Timeline, Stats) |
-| `tests/` | 63 тестов (33 unit + 30 integration) |
+| `tests/` | 113 тестов (83 unit + 30 integration) |
 
 ## Запуск
 
@@ -84,7 +85,9 @@ docker compose up -d
 | Method | Path | Описание |
 |--------|------|----------|
 | POST | `/api/ingest` | Ingest episode через pipeline |
-| POST | `/api/search` | Temporal-aware search |
+| POST | `/api/ingest/file` | Upload & ingest document via Docling (PDF/DOCX/PPTX/XLSX/HTML) |
+| POST | `/api/search` | Temporal-aware search (auto temporal hints) |
+| POST | `/api/ask` | Question + LLM answer (mirrors MCP `tkb_ask`) |
 | GET | `/api/timeline/{entity_id}` | Timeline сущности |
 | GET | `/api/evolution/{event_id}` | Цепочка SUPERSEDED_BY |
 | GET | `/api/stats` | Статистика графа |
@@ -156,7 +159,7 @@ MCP server предоставляет 6 tools для прямой работы �
 
 | Tool | Описание | Ключевые параметры |
 |------|----------|--------------------|
-| `tkb_ingest` | Добавить эпизод в граф знаний | `content`, `source`, `episode_type?`, `reference_time?`, `group_id?` |
+| `tkb_ingest` | Добавить эпизод в граф знаний | `content`, `source`, `episode_type?`, `reference_time?`, `group_id?`, `file_path?` |
 | `tkb_search` | Temporal-aware поиск фактов | `query`, `intent?` (hybrid/structural/temporal), `point_in_time?`, `limit?` |
 | `tkb_ask` | Поиск + LLM ответ (auto temporal hint extraction) | `question`, `include_timeline?` |
 | `tkb_timeline` | Timeline сущности | `entity_id` |
@@ -197,6 +200,46 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 - Edges: `build_search_filters()` → `SearchFilters(valid_at=DateFilter(...))`
 - TemporalEvent: `neo4j.query_point_in_time()`
 
+### Shared Modules
+
+**`core/temporal_hints.py`** — shared temporal hint extraction (MCP + FastAPI):
+- `extract_temporal_hint(question)` → regex рус/англ date extraction
+- Used by: `mcp_server.py` (backward-compat wrapper), `api/server.py` (direct import)
+
+### Streamlit UI Features
+
+- **Ingest tab**: paste text OR file upload (TXT/MD/JSON/PDF/DOCX/PPTX/XLSX/HTML, max 10MB)
+- **Search tab**: calls `/api/ask` with auto temporal hints
+- **Timeline tab**: entity timeline + fact evolution chains
+- **Stats tab**: graph statistics (entities, events, episodes)
+
+**File upload pipeline**: `st.file_uploader → DoclingLoader.load_bytes() → /api/ingest`
+- PDF/DOCX/PPTX/XLSX/HTML: IBM Docling (tables, images, OCR)
+- TXT/MD: plain text read (no Docling)
+- Auto-detect episode type from extension (.json→json, .pdf/.docx/.pptx/.xlsx/.html→document)
+- Shows document stats after upload (tables, images, pages)
+
+### Docling Integration
+
+**Module**: `ingestion/document_loader.py` — `DoclingLoader` + `DocumentResult`
+
+**Supported formats**: PDF, DOCX, PPTX, XLSX, HTML, TXT, MD
+**Features**: TableFormer (table extraction), OCR, image classification
+**Lazy init**: Models (~1-2GB) downloaded on first call to `_get_converter()`
+
+```python
+from ingestion.document_loader import DoclingLoader
+loader = DoclingLoader()
+result = loader.load("report.pdf")      # From file
+result = loader.load_bytes(data, "f.pdf") # From bytes
+print(result.markdown)   # Full markdown with tables
+print(result.tables)     # [{caption, markdown, csv, page}]
+print(result.images)     # [{caption, page}]
+print(result.metadata)   # {format, pages, tables_count, images_count}
+```
+
+**Table-aware chunking**: `SemanticChunker` preserves markdown tables (`| ... |`) as atomic units — never splits tables across chunks.
+
 ## Следующие шаги
 
 - [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
@@ -204,5 +247,12 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 - [x] API + UI тестирование ✅ (Ingest, Search, Stats работают через Streamlit)
 - [x] MCP server для интеграции с Claude Code ✅ (6 tools, 25 unit тестов)
 - [x] Auto temporal hint extraction для tkb_ask ✅ (2026-02-08)
-- [ ] Document loaders (PDF, HTML, JSON files)
+- [x] File upload (TXT/MD/JSON/PDF) ✅ `827bda3`
+- [x] `/api/ask` endpoint (MCP parity) ✅ `827bda3`
+- [x] Shared `core/temporal_hints.py` ✅ `827bda3`
+- [x] Docling integration (PDF, DOCX, PPTX, XLSX, HTML) ✅
+- [x] Table-aware chunking ✅
+- [x] POST /api/ingest/file endpoint ✅
+- [x] MCP tkb_ingest file_path parameter ✅
+- [x] Document metadata enrichment ✅
 - [ ] Community detection (Graphiti `build_communities`)

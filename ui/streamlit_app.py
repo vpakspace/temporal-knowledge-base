@@ -10,13 +10,23 @@ Tabs:
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 import httpx
 import streamlit as st
 
+# Add project root to path for imports
+_project_root = str(Path(__file__).resolve().parent.parent)
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from ingestion.document_loader import DoclingLoader
+
 API_BASE = "http://localhost:8000"
 
 MAX_FILE_SIZE_MB = 10
+_doc_loader = DoclingLoader()
 
 st.set_page_config(
     page_title="Temporal Knowledge Base",
@@ -47,43 +57,36 @@ def api_call(method: str, path: str, **kwargs):
         return None
 
 
-def extract_text_from_file(uploaded_file) -> str | None:
-    """Extract text content from uploaded file."""
+def extract_text_from_file(uploaded_file) -> tuple[str | None, dict | None]:
+    """Extract text content from uploaded file using DoclingLoader.
+
+    Returns (markdown_text, metadata) or (None, None) on error.
+    JSON files are handled specially (pretty-printed).
+    """
     name = uploaded_file.name.lower()
     raw = uploaded_file.read()
 
-    if name.endswith(".txt") or name.endswith(".md"):
-        return raw.decode("utf-8", errors="replace")
-
+    # JSON handled separately (not a Docling format)
     if name.endswith(".json"):
         try:
             data = json.loads(raw.decode("utf-8"))
-            return json.dumps(data, ensure_ascii=False, indent=2)
+            return json.dumps(data, ensure_ascii=False, indent=2), {"format": ".json"}
         except json.JSONDecodeError:
             st.error("Invalid JSON file")
-            return None
+            return None, None
 
-    if name.endswith(".pdf"):
-        try:
-            import pypdf
-            from io import BytesIO
-
-            reader = pypdf.PdfReader(BytesIO(raw))
-            pages = [page.extract_text() or "" for page in reader.pages]
-            text = "\n\n".join(pages).strip()
-            if not text:
-                st.warning("PDF has no extractable text (may be image-based)")
-                return None
-            return text
-        except ImportError:
-            st.error("pypdf not installed. Run: pip install pypdf")
-            return None
-        except Exception as e:
-            st.error(f"PDF extraction failed: {e}")
-            return None
-
-    st.error(f"Unsupported file type: {name}")
-    return None
+    try:
+        result = _doc_loader.load_bytes(raw, uploaded_file.name)
+        if not result.markdown.strip():
+            st.warning("Document has no extractable text (may be image-based)")
+            return None, None
+        return result.markdown, result.metadata
+    except ValueError as e:
+        st.error(str(e))
+        return None, None
+    except Exception as e:
+        st.error(f"Document processing failed: {e}")
+        return None, None
 
 
 # --- Tabs ---
@@ -122,8 +125,8 @@ with tab_ingest:
         with col1:
             uploaded = st.file_uploader(
                 "Upload file",
-                type=["txt", "md", "json", "pdf"],
-                help=f"Supported: TXT, MD, JSON, PDF (max {MAX_FILE_SIZE_MB} MB)",
+                type=["txt", "md", "json", "pdf", "docx", "pptx", "xlsx", "html"],
+                help=f"Supported: TXT, MD, JSON, PDF, DOCX, PPTX, XLSX, HTML (max {MAX_FILE_SIZE_MB} MB)",
             )
             if uploaded is not None:
                 if uploaded.size > MAX_FILE_SIZE_MB * 1024 * 1024:
@@ -132,12 +135,18 @@ with tab_ingest:
                         f"Max: {MAX_FILE_SIZE_MB} MB"
                     )
                 else:
-                    extracted = extract_text_from_file(uploaded)
+                    extracted, doc_meta = extract_text_from_file(uploaded)
                     if extracted:
                         content = extracted
-                        st.success(
-                            f"Extracted {len(content):,} characters from {uploaded.name}"
-                        )
+                        info_parts = [f"Extracted {len(content):,} characters from {uploaded.name}"]
+                        if doc_meta:
+                            if doc_meta.get("tables_count"):
+                                info_parts.append(f"{doc_meta['tables_count']} tables")
+                            if doc_meta.get("images_count"):
+                                info_parts.append(f"{doc_meta['images_count']} images")
+                            if doc_meta.get("pages"):
+                                info_parts.append(f"{doc_meta['pages']} pages")
+                        st.success(" | ".join(info_parts))
                         with st.expander("Preview content"):
                             st.text(content[:2000] + ("..." if len(content) > 2000 else ""))
         with col2:
@@ -147,10 +156,12 @@ with tab_ingest:
             )
             # Auto-detect type from extension
             default_type = "text"
-            if uploaded and uploaded.name.lower().endswith(".json"):
-                default_type = "json"
-            elif uploaded and uploaded.name.lower().endswith(".pdf"):
-                default_type = "document"
+            if uploaded:
+                ext = uploaded.name.lower().rsplit(".", 1)[-1] if "." in uploaded.name else ""
+                if ext == "json":
+                    default_type = "json"
+                elif ext in {"pdf", "docx", "pptx", "xlsx", "html"}:
+                    default_type = "document"
             type_options = ["text", "json", "chat", "document"]
             episode_type = st.selectbox(
                 "Type",
