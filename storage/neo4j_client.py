@@ -346,8 +346,9 @@ class Neo4jClient:
         """Get all entities with their basic info."""
         query = """
         MATCH (e:Entity)
-        RETURN e.id AS id, e.name AS name,
-               e.entity_type AS entity_type,
+        RETURN COALESCE(e.id, e.uuid) AS id,
+               e.name AS name,
+               COALESCE(e.entity_type, head(e.labels)) AS entity_type,
                e.canonical_name AS canonical_name
         ORDER BY e.name
         LIMIT $limit
@@ -359,7 +360,8 @@ class Neo4jClient:
     async def get_entity_details(self, entity_id: str) -> dict[str, Any] | None:
         """Get entity with its relationships and event counts."""
         query = """
-        MATCH (e:Entity {id: $entity_id})
+        MATCH (e:Entity)
+        WHERE e.id = $entity_id OR e.uuid = $entity_id
         OPTIONAL MATCH (e)<-[:MENTIONS]-(te:TemporalEvent)
         WITH e,
              count(te) AS total_events,
@@ -367,24 +369,24 @@ class Neo4jClient:
         OPTIONAL MATCH (e)-[r:RELATES_TO]->(other:Entity)
         WITH e, total_events, current_events,
              collect(DISTINCT {
-                id: r.id,
-                relation_type: r.relation_type,
-                target_id: other.id,
+                id: COALESCE(r.id, r.uuid),
+                relation_type: COALESCE(r.relation_type, r.name),
+                target_id: COALESCE(other.id, other.uuid),
                 target_name: other.name,
                 direction: 'outgoing'
              }) AS outgoing
         OPTIONAL MATCH (e)<-[r2:RELATES_TO]-(other2:Entity)
-        RETURN e.id AS id, e.name AS name,
-               e.entity_type AS entity_type,
+        RETURN COALESCE(e.id, e.uuid) AS id, e.name AS name,
+               COALESCE(e.entity_type, head(e.labels)) AS entity_type,
                e.canonical_name AS canonical_name,
                e.valid_at AS valid_at,
                e.created_at AS created_at,
                total_events, current_events,
                outgoing +
                collect(DISTINCT {
-                id: r2.id,
-                relation_type: r2.relation_type,
-                target_id: other2.id,
+                id: COALESCE(r2.id, r2.uuid),
+                relation_type: COALESCE(r2.relation_type, r2.name),
+                target_id: COALESCE(other2.id, other2.uuid),
                 target_name: other2.name,
                 direction: 'incoming'
                }) AS relationships
@@ -403,14 +405,17 @@ class Neo4jClient:
         """Get entities and relationships for graph visualization."""
         nodes_query = """
         MATCH (e:Entity)
-        RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type
+        RETURN COALESCE(e.id, e.uuid) AS id,
+               e.name AS name,
+               COALESCE(e.entity_type, head(e.labels)) AS entity_type
         ORDER BY e.name
         LIMIT $limit
         """
         edges_query = """
         MATCH (src:Entity)-[r:RELATES_TO]->(tgt:Entity)
-        RETURN src.id AS source, tgt.id AS target,
-               r.relationship_type AS label
+        RETURN COALESCE(src.id, src.uuid) AS source,
+               COALESCE(tgt.id, tgt.uuid) AS target,
+               COALESCE(r.relationship_type, r.name) AS label
         LIMIT $limit
         """
         async with self.session() as session:
@@ -429,7 +434,7 @@ class Neo4jClient:
         query = """
         MATCH (c:Community)
         OPTIONAL MATCH (c)-[:HAS_MEMBER]->(e:Entity)
-        WITH c, collect({id: e.id, name: e.name, entity_type: e.entity_type}) AS members
+        WITH c, collect({id: COALESCE(e.id, e.uuid), name: e.name, entity_type: COALESCE(e.entity_type, head(e.labels))}) AS members
         RETURN c.uuid AS id, c.name AS name, c.summary AS summary,
                size(members) AS member_count, members
         ORDER BY size(members) DESC
@@ -451,8 +456,10 @@ class Neo4jClient:
         MATCH (e:Entity)
         OPTIONAL MATCH path = (e)-[:RELATES_TO*1..5]-(connected:Entity)
         WITH e, collect(DISTINCT connected) AS neighbors
-        RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
-               [n IN neighbors | n.id] AS connected_ids
+        RETURN COALESCE(e.id, e.uuid) AS id,
+               e.name AS name,
+               COALESCE(e.entity_type, head(e.labels)) AS entity_type,
+               [n IN neighbors | COALESCE(n.id, n.uuid)] AS connected_ids
         """
         async with self.session() as session:
             result = await session.run(query)
@@ -513,7 +520,8 @@ class Neo4jClient:
         hotspots_q = """
         MATCH (te:TemporalEvent)-[:SUPERSEDED_BY]->(:TemporalEvent)
         MATCH (te)-[:MENTIONS]->(e:Entity)
-        WITH e.id AS entity_id, e.name AS entity_name, e.entity_type AS entity_type,
+        WITH COALESCE(e.id, e.uuid) AS entity_id, e.name AS entity_name,
+             COALESCE(e.entity_type, head(e.labels)) AS entity_type,
              count(te) AS superseded_count
         WHERE superseded_count > 0
         RETURN entity_id, entity_name, entity_type, superseded_count
