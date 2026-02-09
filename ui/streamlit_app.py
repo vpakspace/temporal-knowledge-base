@@ -301,7 +301,7 @@ with tab_entities:
                 key="entity_search",
             )
         with col_type:
-            all_types = sorted({e.get("entity_type", "unknown") for e in entities})
+            all_types = sorted({e.get("entity_type") or "unknown" for e in entities})
             type_filter = st.multiselect("Filter by type", all_types, key="entity_type_filter")
 
         # Apply filters
@@ -464,15 +464,16 @@ with tab_graph:
                     ag_nodes = [
                         Node(
                             id=n["id"],
-                            label=n.get("name", n["id"][:8]),
+                            label=n.get("name") or (n["id"] or "?")[:8],
                             size=20,
-                            color=type_colors.get(n.get("entity_type", ""), "#607D8B"),
+                            color=type_colors.get(n.get("entity_type") or "", "#607D8B"),
                         )
                         for n in nodes_data
+                        if n.get("id")
                     ]
 
                     # Only include edges where both source and target exist
-                    node_ids = {n["id"] for n in nodes_data}
+                    node_ids = {n["id"] for n in nodes_data if n.get("id")}
                     ag_edges = [
                         Edge(
                             source=e["source"],

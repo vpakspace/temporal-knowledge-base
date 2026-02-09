@@ -10,4 +10,5 @@ build/
 .venv/
 *.pdf
 *.png
+!docs/screenshots/*.png
 data/
