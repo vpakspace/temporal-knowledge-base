@@ -400,6 +400,29 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "col_endpoint": {"en": "Endpoint", "ru": "Эндпоинт"},
     "col_count": {"en": "Count", "ru": "Кол-во"},
     "col_avg": {"en": "Avg", "ru": "Среднее"},
+    # --- Clear Database ---
+    "clear_database": {"en": "Clear Database", "ru": "Очистить базу данных"},
+    "clear_database_caption": {
+        "en": "Permanently delete ALL nodes and relationships from Neo4j",
+        "ru": "Безвозвратно удалить ВСЕ узлы и связи из Neo4j",
+    },
+    "clear_confirm_text": {
+        "en": "Type DELETE to confirm",
+        "ru": "Введите DELETE для подтверждения",
+    },
+    "clear_btn": {"en": "Clear All Data", "ru": "Удалить все данные"},
+    "clearing_database": {
+        "en": "Clearing database...",
+        "ru": "Очистка базы данных...",
+    },
+    "database_cleared": {
+        "en": "Deleted {nodes} nodes and {rels} relationships",
+        "ru": "Удалено {nodes} узлов и {rels} связей",
+    },
+    "clear_confirm_wrong": {
+        "en": "Please type DELETE to confirm",
+        "ru": "Пожалуйста, введите DELETE для подтверждения",
+    },
 }
 
 

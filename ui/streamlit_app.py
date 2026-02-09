@@ -567,9 +567,7 @@ with tab_graph:
                             if source == "graphiti"
                             else t("connected_components")
                         )
-                        st.caption(
-                            t("source_clusters", source=source_name, count=len(communities))
-                        )
+                        st.caption(t("source_clusters", source=source_name, count=len(communities)))
                         for comm in communities:
                             members = comm.get("members", [])
                             label = (
@@ -578,9 +576,7 @@ with tab_graph:
                                 or f"Cluster {comm.get('cluster_id', '?')}"
                             )
                             size = comm.get("member_count") or comm.get("size", len(members))
-                            with st.expander(
-                                f"{label} ({t('n_members', n=size)})", expanded=False
-                            ):
+                            with st.expander(f"{label} ({t('n_members', n=size)})", expanded=False):
                                 if comm.get("summary"):
                                     st.markdown(f"*{comm['summary']}*")
                                 for m in members:
@@ -665,9 +661,7 @@ with tab_contra:
                                 f"Invalidated: `{ch.get('old_invalid_at', '—')}`"
                             )
                             st.markdown(f"**{t('new_replacement')}**")
-                            current_text = (
-                                t("current_yes") if is_current else t("current_no")
-                            )
+                            current_text = t("current_yes") if is_current else t("current_no")
                             st.markdown(
                                 f"> {ch.get('new_statement', '—')}\n\n"
                                 f"Valid: `{ch.get('new_valid_at', '?')}` | "
@@ -901,12 +895,8 @@ with tab_stats:
 
     # Add new webhook
     with st.expander(t("add_webhook")):
-        wh_url = st.text_input(
-            t("webhook_url_label"), placeholder="https://example.com/webhook"
-        )
-        wh_name = st.text_input(
-            t("webhook_name_label"), placeholder="Slack notification"
-        )
+        wh_url = st.text_input(t("webhook_url_label"), placeholder="https://example.com/webhook")
+        wh_name = st.text_input(t("webhook_name_label"), placeholder="Slack notification")
         if st.button(t("register_webhook_btn")):
             if wh_url:
                 result = api_call("POST", "/api/webhooks", json={"url": wh_url, "name": wh_name})
@@ -915,3 +905,28 @@ with tab_stats:
                     st.rerun()
             else:
                 st.warning(t("enter_webhook_url"))
+
+    st.divider()
+
+    # --- Clear Database ---
+    st.subheader(t("clear_database"))
+    st.caption(t("clear_database_caption"))
+
+    confirm_text = st.text_input(
+        t("clear_confirm_text"), key="clear_db_confirm", placeholder="DELETE"
+    )
+    if st.button(t("clear_btn"), type="primary"):
+        if confirm_text == "DELETE":
+            with st.spinner(t("clearing_database")):
+                result = api_call("POST", "/api/clear")
+                if result and result.get("success"):
+                    counts = result["data"]
+                    st.success(
+                        t(
+                            "database_cleared",
+                            nodes=counts.get("nodes", 0),
+                            rels=counts.get("relationships", 0),
+                        )
+                    )
+        else:
+            st.warning(t("clear_confirm_wrong"))

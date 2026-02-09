@@ -54,6 +54,31 @@ class Neo4jClient:
             await self._driver.close()
             self._driver = None
 
+    async def clear_database(self) -> dict[str, int]:
+        """Delete ALL nodes and relationships. Returns counts of deleted items."""
+        count_query = """
+        MATCH (n)
+        OPTIONAL MATCH (n)-[r]-()
+        RETURN count(DISTINCT n) AS nodes, count(DISTINCT r) AS relationships
+        """
+        delete_query = """
+        MATCH (n) DETACH DELETE n
+        """
+        async with self.session() as session:
+            result = await session.run(count_query)
+            record = await result.single()
+            counts = {
+                "nodes": record["nodes"] if record else 0,
+                "relationships": record["relationships"] if record else 0,
+            }
+            await session.run(delete_query)
+            logger.info(
+                "Cleared database: %d nodes, %d relationships",
+                counts["nodes"],
+                counts["relationships"],
+            )
+            return counts
+
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
         if not self._driver:

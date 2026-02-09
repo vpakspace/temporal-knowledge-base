@@ -12,6 +12,7 @@ Endpoints:
 - GET  /api/cache/stats — Cache hit/miss statistics
 - POST /api/cache/clear — Clear all caches
 - GET  /api/metrics    — Request/pipeline metrics
+- POST /api/clear      — Clear all data from Neo4j (irreversible)
 - GET  /api/stats      — Graph statistics
 - GET  /health         — Health check
 """
@@ -538,6 +539,18 @@ async def clear_caches():
     llm.cache.clear()
     vs.cache.clear()
     return {"success": True}
+
+
+@app.post("/api/clear", dependencies=_auth)
+async def clear_database():
+    """Delete ALL nodes and relationships from Neo4j. Irreversible."""
+    neo4j: Neo4jClient = _state["neo4j"]
+    try:
+        counts = await neo4j.clear_database()
+        return {"success": True, "data": counts}
+    except Exception as e:
+        logger.exception("Clear database failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/stats", dependencies=_auth)
