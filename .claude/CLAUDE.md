@@ -9,7 +9,7 @@
 
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
-**Latest commit**: `b15fffd`
+**Latest commit**: `895b637`
 **Тесты**: 117 unit + 30 integration = 147 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
@@ -64,9 +64,9 @@ Layers 6-7:  Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
 | `temporal/` | Invalidation agent, entity resolution |
 | `retrieval/` | Query engine (intent-aware search) |
 | `generation/` | LLM client, temporal verifier (Layer 14), response builder |
-| `api/` | FastAPI server (8 endpoints) |
-| `ui/` | Streamlit UI (4 tabs: Ingest, Search, Timeline, Stats) |
-| `tests/` | 113 тестов (83 unit + 30 integration) |
+| `api/` | FastAPI server (23 endpoints), auth middleware |
+| `ui/` | Streamlit UI (7 tabs), i18n (en/ru) |
+| `tests/` | 117 unit + 30 integration = 147 total |
 
 ## Запуск
 
@@ -106,6 +106,7 @@ docker compose up -d
 | GET | `/api/metrics` | Request/pipeline metrics (counters, latencies, uptime) |
 | GET | `/api/cache/stats` | Cache hit/miss statistics (LLM + embeddings) |
 | POST | `/api/cache/clear` | Clear all caches |
+| POST | `/api/clear` | Delete ALL nodes and relationships (irreversible, requires DELETE confirmation in UI) |
 | GET | `/api/stats` | Статистика графа |
 | GET | `/health` | Health check |
 
@@ -231,7 +232,7 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 - **Timeline tab**: entity autocomplete dropdown + fact evolution chains
 - **Graph tab**: interactive knowledge graph visualization (`streamlit-agraph`, color-coded by entity type)
 - **Contradictions tab**: supersession chains, entity hotspots (most contradicted), invalidation log
-- **Stats tab**: graph statistics, export/import (JSON download + upload)
+- **Stats tab**: graph statistics, cache stats, API metrics, export/import, webhooks, **clear database** (DELETE confirmation)
 
 **File upload pipeline**: `st.file_uploader → DoclingLoader.load_bytes() → /api/ingest`
 - PDF/DOCX/PPTX/XLSX/HTML: IBM Docling (tables, images, OCR)
@@ -260,6 +261,40 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 
 **Table-aware chunking**: `SemanticChunker` preserves markdown tables (`| ... |`) as atomic units — never splits tables across chunks.
 
+### i18n (Internationalization)
+
+**Module**: `ui/i18n.py` — ~180 translation keys (en/ru)
+
+```python
+from ui.i18n import get_translator
+t = get_translator("ru")  # or "en"
+t("page_title")  # → "Темпоральная База Знаний"
+t("database_cleared", nodes=5, rels=10)  # → "Удалено 5 узлов и 10 связей"
+```
+
+- Sidebar language selector with `st.session_state.lang` persistence
+- All 7 tabs fully translated
+- Streamlit `width="stretch"` (replaces deprecated `use_container_width=True`)
+
+### Graphiti vs Our Nodes: Property Mismatch
+
+Graphiti Entity nodes use **different property names** than our dual-track layer:
+| Property | Graphiti | Our Layer |
+|----------|----------|-----------|
+| ID | `uuid` | `id` |
+| Type | `labels` (array) | `entity_type` (string) |
+| Rel type | `r.name` | `r.relationship_type` |
+
+**Fix**: `COALESCE(e.id, e.uuid)` and `COALESCE(e.entity_type, head(e.labels))` in ALL Cypher queries.
+Applied in 6 methods: `get_graph_data`, `get_all_entities`, `get_entity_details`, `get_communities`, `get_entity_clusters`, `get_contradictions`.
+
+### Clear Database
+
+- `Neo4jClient.clear_database()` — counts nodes/relationships, then `MATCH (n) DETACH DELETE n`
+- `POST /api/clear` — API endpoint with auth
+- UI: Stats tab → text input "DELETE" confirmation + button
+- Protection: must type exactly `DELETE` to proceed
+
 ## Следующие шаги
 
 - [x] Integration test с реальным Neo4j + OpenAI API ✅ (30 тестов)
@@ -278,6 +313,9 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 - [x] Docling installed and tested (PDF with table + chart) ✅ `4a6ecdc`
 - [x] README.md with installation guide ✅ `b15fffd`
 - [x] Community detection (Graphiti `build_communities` + lightweight clusters) ✅
+- [x] i18n — Russian/English language selector ✅ `6aed7b9`
+- [x] COALESCE fix for Graphiti uuid/labels property mismatch ✅ `5634e1c`
+- [x] Clear database button in UI with DELETE confirmation ✅ `895b637`
 
 ## План улучшений (2026-02-08)
 
