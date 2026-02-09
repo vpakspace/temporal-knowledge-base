@@ -27,6 +27,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from ingestion.document_loader import DoclingLoader
+from ui.i18n import get_translator  # type: ignore[import-not-found]
 
 API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
 API_KEY = os.environ.get("APP_API_KEY", "")
@@ -40,8 +41,22 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("Temporal Knowledge Base")
-st.caption("Graphiti + GraphOS | Bi-temporal Knowledge Graph")
+# --- Language selector ---
+if "lang" not in st.session_state:
+    st.session_state.lang = "en"
+
+lang = st.sidebar.selectbox(
+    "Language / Язык",
+    options=["en", "ru"],
+    index=0 if st.session_state.lang == "en" else 1,
+    format_func=lambda x: "English" if x == "en" else "Русский",
+    key="lang_select",
+)
+st.session_state.lang = lang
+t = get_translator(lang)
+
+st.title(t("page_title"))
+st.caption(t("page_caption"))
 
 
 def api_call(method: str, path: str, **kwargs):
@@ -60,10 +75,10 @@ def api_call(method: str, path: str, **kwargs):
             resp.raise_for_status()
             return resp.json()
     except httpx.ConnectError:
-        st.error("API server not running. Start with: uvicorn api.server:app")
+        st.error(t("api_not_running"))
         return None
     except Exception as e:
-        st.error(f"API error: {e}")
+        st.error(t("api_error", e=e))
         return None
 
 
@@ -82,20 +97,20 @@ def extract_text_from_file(uploaded_file) -> tuple[str | None, dict | None]:
             data = json.loads(raw.decode("utf-8"))
             return json.dumps(data, ensure_ascii=False, indent=2), {"format": ".json"}
         except json.JSONDecodeError:
-            st.error("Invalid JSON file")
+            st.error(t("invalid_json_file"))
             return None, None
 
     try:
         result = _doc_loader.load_bytes(raw, uploaded_file.name)
         if not result.markdown.strip():
-            st.warning("Document has no extractable text (may be image-based)")
+            st.warning(t("no_extractable_text"))
             return None, None
         return result.markdown, result.metadata
     except ValueError as e:
         st.error(str(e))
         return None, None
     except Exception as e:
-        st.error(f"Document processing failed: {e}")
+        st.error(t("doc_processing_failed", e=e))
         return None, None
 
 
@@ -113,97 +128,108 @@ def _fetch_entities() -> list[dict]:
 
 # --- Tabs ---
 tab_ingest, tab_search, tab_entities, tab_timeline, tab_graph, tab_contra, tab_stats = st.tabs(
-    ["Ingest", "Search", "Entities", "Timeline", "Graph", "Contradictions", "Stats"]
+    [
+        t("tab_ingest"),
+        t("tab_search"),
+        t("tab_entities"),
+        t("tab_timeline"),
+        t("tab_graph"),
+        t("tab_contradictions"),
+        t("tab_stats"),
+    ]
 )
 
 # --- Tab 1: Ingest ---
 with tab_ingest:
-    st.header("Ingest Episode")
+    st.header(t("ingest_header"))
 
     input_method = st.radio(
-        "Input method",
-        ["Paste text", "Upload file", "Batch (JSON)"],
+        t("input_method"),
+        [t("paste_text"), t("upload_file"), t("batch_json")],
         horizontal=True,
     )
 
     content = ""
+    source = "manual"
+    episode_type = "text"
+    group_id = ""
 
-    if input_method == "Batch (JSON)":
-        st.markdown(
-            "Paste a JSON array of episodes. Each item: "
-            '`{"content": "...", "source": "...", "episode_type": "text"}`'
-        )
+    if input_method == t("batch_json"):
+        st.markdown(t("batch_json_help"))
         batch_json = st.text_area(
-            "Batch JSON",
+            t("batch_json_label"),
             height=250,
             placeholder='[{"content": "Fact 1", "source": "src1"}, {"content": "Fact 2", "source": "src2"}]',
             key="batch_json",
         )
-        if st.button("Ingest Batch", type="primary", disabled=not batch_json.strip()):
+        if st.button(t("ingest_batch_btn"), type="primary", disabled=not batch_json.strip()):
             try:
                 episodes = json.loads(batch_json)
                 if not isinstance(episodes, list):
-                    st.error("JSON must be an array of objects")
+                    st.error(t("json_must_be_array"))
                 else:
-                    progress = st.progress(0, text="Starting batch ingestion...")
+                    progress = st.progress(0, text=t("starting_batch"))
                     result = api_call("POST", "/api/ingest/batch", json=episodes)
-                    progress.progress(100, text="Done!")
+                    progress.progress(100, text=t("done"))
                     if result and result.get("success"):
                         c1, c2, c3 = st.columns(3)
-                        c1.metric("Total", result["total"])
-                        c2.metric("Succeeded", result["succeeded"])
-                        c3.metric("Failed", result["failed"])
+                        c1.metric(t("total"), result["total"])
+                        c2.metric(t("succeeded"), result["succeeded"])
+                        c3.metric(t("failed"), result["failed"])
                         if result["failed"] > 0:
                             for r in result["results"]:
                                 if not r["success"]:
                                     st.error(f"Episode {r['index']}: {r['error']}")
             except json.JSONDecodeError:
-                st.error("Invalid JSON")
+                st.error(t("invalid_json"))
 
-    elif input_method == "Paste text":
+    elif input_method == t("paste_text"):
         col1, col2 = st.columns([3, 1])
         with col1:
             content = st.text_area(
-                "Content",
+                t("content_label"),
                 height=200,
-                placeholder="Paste text, JSON, or document content...",
+                placeholder=t("content_placeholder"),
             )
         with col2:
-            source = st.text_input("Source", value="manual")
-            episode_type = st.selectbox("Type", ["text", "json", "chat", "document"])
-            group_id = st.text_input("Group ID (optional)", value="")
+            source = st.text_input(t("source_label"), value="manual")
+            episode_type = st.selectbox(t("type_label"), ["text", "json", "chat", "document"])
+            group_id = st.text_input(t("group_id_label"), value="")
     else:
         col1, col2 = st.columns([3, 1])
         with col1:
             uploaded = st.file_uploader(
-                "Upload file",
+                t("upload_file_label"),
                 type=["txt", "md", "json", "pdf", "docx", "pptx", "xlsx", "html"],
-                help=f"Supported: TXT, MD, JSON, PDF, DOCX, PPTX, XLSX, HTML (max {MAX_FILE_SIZE_MB} MB)",
+                help=t("upload_help", max_mb=MAX_FILE_SIZE_MB),
             )
             if uploaded is not None:
                 if uploaded.size > MAX_FILE_SIZE_MB * 1024 * 1024:
                     st.error(
-                        f"File too large ({uploaded.size / 1024 / 1024:.1f} MB). "
-                        f"Max: {MAX_FILE_SIZE_MB} MB"
+                        t(
+                            "file_too_large",
+                            size=uploaded.size / 1024 / 1024,
+                            max_mb=MAX_FILE_SIZE_MB,
+                        )
                     )
                 else:
                     extracted, doc_meta = extract_text_from_file(uploaded)
                     if extracted:
                         content = extracted
-                        info_parts = [f"Extracted {len(content):,} characters from {uploaded.name}"]
+                        info_parts = [t("extracted_chars", count=len(content), name=uploaded.name)]
                         if doc_meta:
                             if doc_meta.get("tables_count"):
-                                info_parts.append(f"{doc_meta['tables_count']} tables")
+                                info_parts.append(f"{doc_meta['tables_count']} {t('tables')}")
                             if doc_meta.get("images_count"):
-                                info_parts.append(f"{doc_meta['images_count']} images")
+                                info_parts.append(f"{doc_meta['images_count']} {t('images')}")
                             if doc_meta.get("pages"):
-                                info_parts.append(f"{doc_meta['pages']} pages")
+                                info_parts.append(f"{doc_meta['pages']} {t('pages')}")
                         st.success(" | ".join(info_parts))
-                        with st.expander("Preview content"):
+                        with st.expander(t("preview_content")):
                             st.text(content[:2000] + ("..." if len(content) > 2000 else ""))
         with col2:
             source = st.text_input(
-                "Source",
+                t("source_label"),
                 value=uploaded.name if uploaded else "file_upload",
             )
             # Auto-detect type from extension
@@ -216,14 +242,14 @@ with tab_ingest:
                     default_type = "document"
             type_options = ["text", "json", "chat", "document"]
             episode_type = st.selectbox(
-                "Type",
+                t("type_label"),
                 type_options,
                 index=type_options.index(default_type),
             )
-            group_id = st.text_input("Group ID (optional)", value="")
+            group_id = st.text_input(t("group_id_label"), value="")
 
-    if st.button("Ingest", type="primary", disabled=not content):
-        with st.spinner("Processing episode..."):
+    if st.button(t("ingest_btn"), type="primary", disabled=not content):
+        with st.spinner(t("processing_episode")):
             result = api_call(
                 "POST",
                 "/api/ingest",
@@ -236,29 +262,29 @@ with tab_ingest:
             )
             if result and result.get("success"):
                 data = result["data"]
-                st.success("Episode ingested!")
+                st.success(t("episode_ingested"))
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Entities", data.get("entities_extracted", 0))
-                c2.metric("Events", data.get("temporal_events", 0))
-                c3.metric("Relations", data.get("relationships", 0))
-                c4.metric("Invalidated", data.get("invalidated", 0))
+                c1.metric(t("entities"), data.get("entities_extracted", 0))
+                c2.metric(t("events"), data.get("temporal_events", 0))
+                c3.metric(t("relations"), data.get("relationships", 0))
+                c4.metric(t("invalidated"), data.get("invalidated", 0))
 
 # --- Tab 2: Search ---
 with tab_search:
-    st.header("Temporal Search")
+    st.header(t("search_header"))
 
-    query = st.text_input("Query", placeholder="What changed in 2024?")
+    query = st.text_input(t("query_label"), placeholder=t("query_placeholder"))
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        intent = st.selectbox("Intent", ["hybrid", "structural", "temporal"])
+        intent = st.selectbox(t("intent_label"), ["hybrid", "structural", "temporal"])
     with col2:
-        limit = st.slider("Results", 1, 50, 10)
+        limit = st.slider(t("results_label"), 1, 50, 10)
     with col3:
-        include_timeline = st.checkbox("Include timeline")
+        include_timeline = st.checkbox(t("include_timeline"))
 
-    if st.button("Search", type="primary", disabled=not query):
-        with st.spinner("Searching..."):
+    if st.button(t("search_btn"), type="primary", disabled=not query):
+        with st.spinner(t("searching")):
             result = api_call(
                 "POST",
                 "/api/ask",
@@ -270,42 +296,42 @@ with tab_search:
             if result and result.get("success"):
                 data = result["data"]
 
-                st.subheader("Answer")
-                st.write(data.get("answer", "No answer"))
-                st.caption(f"Based on {data.get('facts_used', 0)} verified facts")
+                st.subheader(t("answer"))
+                st.write(data.get("answer", t("no_answer")))
+                st.caption(t("based_on_facts", count=data.get("facts_used", 0)))
 
                 if data.get("sources"):
-                    st.subheader("Sources")
+                    st.subheader(t("sources"))
                     for src in data["sources"]:
                         valid_at = src.get("valid_at", "unknown")
                         st.markdown(f"- **{src['content']}** (valid: {valid_at})")
 
                 if data.get("timeline"):
-                    st.subheader("Timeline")
+                    st.subheader(t("timeline"))
                     for item in data["timeline"]:
                         icon = "✅" if item.get("is_current") else "❌"
                         st.markdown(f"{icon} **{item['date']}**: {item['fact']}")
 
 # --- Tab 3: Entities ---
 with tab_entities:
-    st.header("Entity Explorer")
+    st.header(t("entity_explorer"))
 
     entities = _fetch_entities()
 
     if not entities:
-        st.info("No entities yet. Ingest some data first.")
+        st.info(t("no_entities_yet"))
     else:
         # Filters
         col_search, col_type = st.columns([2, 1])
         with col_search:
             name_filter = st.text_input(
-                "Search by name",
-                placeholder="Type to filter...",
+                t("search_by_name"),
+                placeholder=t("type_to_filter"),
                 key="entity_search",
             )
         with col_type:
             all_types = sorted({e.get("entity_type") or "unknown" for e in entities})
-            type_filter = st.multiselect("Filter by type", all_types, key="entity_type_filter")
+            type_filter = st.multiselect(t("filter_by_type"), all_types, key="entity_type_filter")
 
         # Apply filters
         filtered = entities
@@ -315,7 +341,7 @@ with tab_entities:
         if type_filter:
             filtered = [e for e in filtered if e.get("entity_type") in type_filter]
 
-        st.caption(f"{len(filtered)} of {len(entities)} entities")
+        st.caption(t("x_of_y_entities", filtered=len(filtered), total=len(entities)))
 
         # Entity table
         if filtered:
@@ -324,24 +350,24 @@ with tab_entities:
             df = pd.DataFrame(
                 [
                     {
-                        "Name": e.get("name", ""),
-                        "Type": e.get("entity_type", ""),
-                        "ID": e.get("id", ""),
+                        t("col_name"): e.get("name", ""),
+                        t("col_type"): e.get("entity_type", ""),
+                        t("col_id"): e.get("id", ""),
                     }
                     for e in filtered
                 ]
             )
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
 
             # Entity details
             st.divider()
-            st.subheader("Entity Details")
+            st.subheader(t("entity_details"))
 
             detail_options = {
                 f"{e['name']} ({e.get('entity_type', '?')})": e["id"] for e in filtered
             }
             selected = st.selectbox(
-                "Select entity to inspect",
+                t("select_entity_inspect"),
                 options=[""] + list(detail_options.keys()),
                 index=0,
                 key="entity_detail_select",
@@ -349,26 +375,26 @@ with tab_entities:
 
             if selected:
                 eid = detail_options[selected]
-                with st.spinner("Loading details..."):
+                with st.spinner(t("loading_details")):
                     result = api_call("GET", f"/api/entities/{eid}")
                     if result and result.get("success"):
                         d = result["data"]
 
                         # Metrics
                         c1, c2, c3 = st.columns(3)
-                        c1.metric("Total Events", d.get("total_events", 0))
-                        c2.metric("Current Events", d.get("current_events", 0))
-                        c3.metric("Relationships", len(d.get("relationships", [])))
+                        c1.metric(t("total_events"), d.get("total_events", 0))
+                        c2.metric(t("current_events"), d.get("current_events", 0))
+                        c3.metric(t("relationships"), len(d.get("relationships", [])))
 
                         # Info
-                        st.markdown(f"**Canonical name**: {d.get('canonical_name', '-')}")
+                        st.markdown(f"**{t('canonical_name')}**: {d.get('canonical_name', '-')}")
                         if d.get("valid_at"):
-                            st.markdown(f"**Valid at**: {d['valid_at']}")
+                            st.markdown(f"**{t('valid_at')}**: {d['valid_at']}")
 
                         # Relationships table
                         rels = d.get("relationships", [])
                         if rels:
-                            st.subheader("Relationships")
+                            st.subheader(t("relationships"))
                             for r in rels:
                                 direction = "<-" if r.get("direction") == "incoming" else "->"
                                 st.markdown(
@@ -376,11 +402,11 @@ with tab_entities:
                                     f"{direction} {r.get('target_name', r.get('target_id', '?')[:8])}"
                                 )
                         else:
-                            st.info("No relationships found")
+                            st.info(t("no_relationships"))
 
 # --- Tab 4: Timeline ---
 with tab_timeline:
-    st.header("Entity Timeline")
+    st.header(t("entity_timeline"))
 
     entities = _fetch_entities()
     entity_options = {f"{e['name']} ({e.get('entity_type', '?')})": e["id"] for e in entities}
@@ -388,54 +414,60 @@ with tab_timeline:
     col_select, col_manual = st.columns([3, 1])
     with col_select:
         selected_label = st.selectbox(
-            "Select entity",
+            t("select_entity"),
             options=[""] + list(entity_options.keys()),
             index=0,
-            placeholder="Choose an entity...",
+            placeholder=t("choose_entity"),
         )
     with col_manual:
-        manual_id = st.text_input("Or enter ID", placeholder="UUID")
+        manual_id = st.text_input(t("or_enter_id"), placeholder=t("uuid_placeholder"))
 
     entity_id = entity_options.get(selected_label, "") or manual_id
 
-    if st.button("Get Timeline", disabled=not entity_id):
-        with st.spinner("Loading timeline..."):
+    if st.button(t("get_timeline_btn"), disabled=not entity_id):
+        with st.spinner(t("loading_timeline")):
             result = api_call("GET", f"/api/timeline/{entity_id}")
             if result and result.get("success"):
                 events = result["data"]
                 if events:
                     for ev in events:
-                        superseded = " -> superseded" if ev.get("superseded_by") else ""
+                        superseded_text = (
+                            f" -> {t('superseded')}" if ev.get("superseded_by") else ""
+                        )
                         current_icon = "🟢" if ev.get("is_current") else "🔴"
                         st.markdown(
                             f"{current_icon} **{ev.get('valid_at', '?')}**: "
-                            f"{ev.get('statement', '')}{superseded}"
+                            f"{ev.get('statement', '')}{superseded_text}"
                         )
                 else:
-                    st.info("No events found for this entity")
+                    st.info(t("no_events_entity"))
 
     st.divider()
-    st.subheader("Fact Evolution")
-    event_id = st.text_input("Event ID", placeholder="Enter event UUID")
-    if st.button("Get Evolution", disabled=not event_id):
-        with st.spinner("Loading evolution chain..."):
+    st.subheader(t("fact_evolution"))
+    event_id = st.text_input(t("event_id_label"), placeholder=t("enter_event_uuid"))
+    if st.button(t("get_evolution_btn"), disabled=not event_id):
+        with st.spinner(t("loading_evolution")):
             result = api_call("GET", f"/api/evolution/{event_id}")
             if result and result.get("success"):
                 chain = result["data"]
                 for i, ev in enumerate(chain):
-                    status = "🟢 CURRENT" if ev.get("is_current") else "🔴 Superseded"
+                    status = (
+                        f"🟢 {t('current_status')}"
+                        if ev.get("is_current")
+                        else f"🔴 {t('superseded_status')}"
+                    )
                     st.markdown(
-                        f"**Step {i + 1}** ({status}): {ev.get('statement', '')}\n"
+                        f"**{t('step_n', n=i + 1)}** ({status}): {ev.get('statement', '')}\n"
                         f"- Valid: {ev.get('valid_at', '?')} | "
                         f"Invalid: {ev.get('invalid_at', '-')}"
                     )
 
 # --- Tab 5: Graph ---
 with tab_graph:
-    st.header("Knowledge Graph")
+    st.header(t("knowledge_graph"))
 
-    if st.button("Load Graph"):
-        with st.spinner("Loading graph data..."):
+    if st.button(t("load_graph_btn")):
+        with st.spinner(t("loading_graph")):
             result = api_call("GET", "/api/graph")
             if result and result.get("success"):
                 data = result["data"]
@@ -443,9 +475,15 @@ with tab_graph:
                 edges_data = data.get("edges", [])
 
                 if not nodes_data:
-                    st.info("No entities in the graph yet. Ingest some data first.")
+                    st.info(t("no_entities_graph"))
                 else:
-                    st.caption(f"{len(nodes_data)} entities, {len(edges_data)} relationships")
+                    st.caption(
+                        t(
+                            "n_entities_m_rels",
+                            nodes=len(nodes_data),
+                            edges=len(edges_data),
+                        )
+                    )
 
                     # Color by entity type
                     type_colors = {}
@@ -460,9 +498,9 @@ with tab_graph:
                         "#607D8B",
                     ]
                     for n in nodes_data:
-                        t = n.get("entity_type", "unknown")
-                        if t not in type_colors:
-                            type_colors[t] = palette[len(type_colors) % len(palette)]
+                        tp = n.get("entity_type", "unknown")
+                        if tp not in type_colors:
+                            type_colors[tp] = palette[len(type_colors) % len(palette)]
 
                     ag_nodes = [
                         Node(
@@ -499,34 +537,38 @@ with tab_graph:
 
                     # Legend
                     if type_colors:
-                        st.subheader("Legend")
+                        st.subheader(t("legend"))
                         cols = st.columns(min(len(type_colors), 4))
-                        for i, (t, color) in enumerate(type_colors.items()):
+                        for i, (tp, color) in enumerate(type_colors.items()):
                             cols[i % len(cols)].markdown(
-                                f"<span style='color:{color}'>&#9679;</span> {t}",
+                                f"<span style='color:{color}'>&#9679;</span> {tp}",
                                 unsafe_allow_html=True,
                             )
 
     # --- Communities section ---
     st.divider()
-    st.subheader("Communities / Clusters")
+    st.subheader(t("communities_clusters"))
 
     col_detect, col_build = st.columns(2)
 
     with col_detect:
-        if st.button("Detect Clusters"):
-            with st.spinner("Detecting communities..."):
+        if st.button(t("detect_clusters_btn")):
+            with st.spinner(t("detecting_communities")):
                 result = api_call("GET", "/api/communities")
                 if result and result.get("success"):
                     source = result.get("source", "clusters")
                     communities = result["data"]
 
                     if not communities:
-                        st.info("No clusters found. Ingest more data to form connections.")
+                        st.info(t("no_clusters"))
                     else:
+                        source_name = (
+                            t("graphiti_communities")
+                            if source == "graphiti"
+                            else t("connected_components")
+                        )
                         st.caption(
-                            f"Source: {'Graphiti Communities' if source == 'graphiti' else 'Connected Components'} "
-                            f"| {len(communities)} clusters"
+                            t("source_clusters", source=source_name, count=len(communities))
                         )
                         for comm in communities:
                             members = comm.get("members", [])
@@ -536,7 +578,9 @@ with tab_graph:
                                 or f"Cluster {comm.get('cluster_id', '?')}"
                             )
                             size = comm.get("member_count") or comm.get("size", len(members))
-                            with st.expander(f"{label} ({size} members)", expanded=False):
+                            with st.expander(
+                                f"{label} ({t('n_members', n=size)})", expanded=False
+                            ):
                                 if comm.get("summary"):
                                     st.markdown(f"*{comm['summary']}*")
                                 for m in members:
@@ -545,15 +589,18 @@ with tab_graph:
                                     )
 
     with col_build:
-        st.caption("Build Graphiti communities (uses LLM for summarization)")
-        if st.button("Build Communities (LLM)"):
-            with st.spinner("Building communities via Graphiti (may take a minute)..."):
+        st.caption(t("build_communities_caption"))
+        if st.button(t("build_communities_btn")):
+            with st.spinner(t("building_communities")):
                 result = api_call("POST", "/api/communities/build")
                 if result and result.get("success"):
                     data = result["data"]
                     st.success(
-                        f"Built {data.get('communities', 0)} communities "
-                        f"with {data.get('edges', 0)} membership edges"
+                        t(
+                            "built_communities",
+                            communities=data.get("communities", 0),
+                            edges=data.get("edges", 0),
+                        )
                     )
                     for d in data.get("details", []):
                         st.markdown(f"- **{d.get('name', '?')}**: {d.get('summary', '')[:200]}")
@@ -561,11 +608,11 @@ with tab_graph:
 
 # --- Tab 6: Contradictions ---
 with tab_contra:
-    st.header("Contradiction Dashboard")
-    st.caption("Supersession chains, entity hotspots, and invalidation log")
+    st.header(t("contradiction_dashboard"))
+    st.caption(t("contradiction_caption"))
 
-    if st.button("Load Contradictions"):
-        with st.spinner("Loading contradiction data..."):
+    if st.button(t("load_contradictions_btn")):
+        with st.spinner(t("loading_contradictions")):
             result = api_call("GET", "/api/contradictions")
             if result and result.get("success"):
                 cdata = result["data"]
@@ -575,28 +622,33 @@ with tab_contra:
 
                 # --- Summary metrics ---
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Supersession Chains", len(chains))
-                c2.metric("Entity Hotspots", len(hotspots))
-                c3.metric("Invalidated Facts", len(log))
+                c1.metric(t("supersession_chains"), len(chains))
+                c2.metric(t("entity_hotspots"), len(hotspots))
+                c3.metric(t("invalidated_facts"), len(log))
 
                 # --- Entity Hotspots ---
                 if hotspots:
-                    st.subheader("Entity Hotspots")
-                    st.caption("Entities with the most superseded facts")
+                    st.subheader(t("entity_hotspots"))
+                    st.caption(t("entities_most_superseded"))
                     import pandas as pd
 
                     df_hot = pd.DataFrame(hotspots)
-                    df_hot.columns = ["ID", "Name", "Type", "Superseded Facts"]
+                    df_hot.columns = [
+                        t("col_id"),
+                        t("col_name"),
+                        t("col_type"),
+                        t("col_superseded_facts"),
+                    ]
                     st.dataframe(
-                        df_hot[["Name", "Type", "Superseded Facts"]],
-                        use_container_width=True,
+                        df_hot[[t("col_name"), t("col_type"), t("col_superseded_facts")]],
+                        width="stretch",
                         hide_index=True,
                     )
 
                 # --- Supersession Chains ---
                 if chains:
-                    st.subheader("Supersession Chains")
-                    st.caption("Old facts replaced by new facts")
+                    st.subheader(t("supersession_chains"))
+                    st.caption(t("old_facts_replaced"))
                     for ch in chains:
                         entities_str = ", ".join(ch.get("entities", [])) or "—"
                         is_current = ch.get("new_is_current", False)
@@ -606,68 +658,76 @@ with tab_contra:
                             f"{(ch.get('old_statement') or '')[:80]}",
                             expanded=False,
                         ):
-                            st.markdown("**Old (superseded):**")
+                            st.markdown(f"**{t('old_superseded')}**")
                             st.markdown(
                                 f"> {ch.get('old_statement', '—')}\n\n"
                                 f"Valid: `{ch.get('old_valid_at', '?')}` | "
                                 f"Invalidated: `{ch.get('old_invalid_at', '—')}`"
                             )
-                            st.markdown("**New (replacement):**")
+                            st.markdown(f"**{t('new_replacement')}**")
+                            current_text = (
+                                t("current_yes") if is_current else t("current_no")
+                            )
                             st.markdown(
                                 f"> {ch.get('new_statement', '—')}\n\n"
                                 f"Valid: `{ch.get('new_valid_at', '?')}` | "
-                                f"Current: {'Yes' if is_current else 'No'}"
+                                f"{t('current_label')}: {current_text}"
                             )
                 else:
-                    st.info("No supersession chains found. All facts are current.")
+                    st.info(t("no_supersession_chains"))
 
                 # --- Invalidation Log ---
                 if log:
-                    st.subheader("Invalidation Log")
-                    st.caption("Recent fact invalidations (newest first)")
+                    st.subheader(t("invalidation_log"))
+                    st.caption(t("recent_invalidations"))
                     for entry in log:
                         entities_str = ", ".join(entry.get("entities", [])) or "—"
                         replaced_by = entry.get("replaced_by")
+                        replaced_text = replaced_by or t("no_replacement")
                         st.markdown(
                             f"- **{(entry.get('statement') or '—')[:100]}**\n"
-                            f"  - Entities: {entities_str}\n"
+                            f"  - {t('entities')}: {entities_str}\n"
                             f"  - Valid: `{entry.get('valid_at', '?')}` → "
                             f"Invalidated: `{entry.get('invalid_at', '—')}`\n"
-                            f"  - Replaced by: {replaced_by or '(no replacement)'}"
+                            f"  - {t('replaced_by')}: {replaced_text}"
                         )
 
 
 # --- Tab 7: Stats ---
 with tab_stats:
-    st.header("Graph Statistics")
+    st.header(t("graph_statistics"))
 
-    if st.button("Refresh Stats"):
-        with st.spinner("Loading..."):
+    if st.button(t("refresh_stats_btn")):
+        with st.spinner(t("loading")):
             result = api_call("GET", "/api/stats")
             if result and result.get("success"):
                 data = result["data"]
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Entities", data.get("entities", 0))
-                c2.metric("Total Events", data.get("events", 0))
-                c3.metric("Current Events", data.get("current_events", 0))
-                c4.metric("Episodes", data.get("episodes", 0))
+                c1.metric(t("entities"), data.get("entities", 0))
+                c2.metric(t("total_events"), data.get("events", 0))
+                c3.metric(t("current_events"), data.get("current_events", 0))
+                c4.metric(t("episodes"), data.get("episodes", 0))
 
                 if data.get("events", 0) > 0:
-                    invalidated = data.get("events", 0) - data.get("current_events", 0)
+                    invalidated_count = data.get("events", 0) - data.get("current_events", 0)
                     st.progress(
                         data.get("current_events", 0) / max(data.get("events", 1), 1),
-                        text=f"{data.get('current_events', 0)} current / {invalidated} superseded",
+                        text=t(
+                            "current_superseded_progress",
+                            current=data.get("current_events", 0),
+                            superseded=invalidated_count,
+                        ),
                     )
 
     st.divider()
 
     # --- Cache Stats ---
-    st.subheader("Cache Statistics")
-    st.caption("In-memory TTL cache for OpenAI API calls (LLM intent classification, embeddings)")
+    st.subheader(t("cache_statistics"))
+    st.caption(t("cache_caption"))
 
     col_cache, col_clear = st.columns([3, 1])
     with col_cache:
-        if st.button("Refresh Cache Stats"):
+        if st.button(t("refresh_cache_btn")):
             result = api_call("GET", "/api/cache/stats")
             if result and result.get("success"):
                 data = result["data"]
@@ -676,34 +736,40 @@ with tab_stats:
 
                 lc, ec = st.columns(2)
                 with lc:
-                    st.markdown("**LLM Cache** (intent classification)")
-                    st.metric("Entries", llm_stats.get("size", 0))
-                    st.metric("Hit Rate", f"{llm_stats.get('hit_rate_pct', 0)}%")
+                    st.markdown(f"**{t('llm_cache')}**")
+                    st.metric(t("entries"), llm_stats.get("size", 0))
+                    st.metric(t("hit_rate"), f"{llm_stats.get('hit_rate_pct', 0)}%")
                     st.caption(
-                        f"Hits: {llm_stats.get('hits', 0)}, "
-                        f"Misses: {llm_stats.get('misses', 0)}"
+                        t(
+                            "hits_misses",
+                            hits=llm_stats.get("hits", 0),
+                            misses=llm_stats.get("misses", 0),
+                        )
                     )
                 with ec:
-                    st.markdown("**Embedding Cache**")
-                    st.metric("Entries", emb_stats.get("size", 0))
-                    st.metric("Hit Rate", f"{emb_stats.get('hit_rate_pct', 0)}%")
+                    st.markdown(f"**{t('embedding_cache')}**")
+                    st.metric(t("entries"), emb_stats.get("size", 0))
+                    st.metric(t("hit_rate"), f"{emb_stats.get('hit_rate_pct', 0)}%")
                     st.caption(
-                        f"Hits: {emb_stats.get('hits', 0)}, "
-                        f"Misses: {emb_stats.get('misses', 0)}"
+                        t(
+                            "hits_misses",
+                            hits=emb_stats.get("hits", 0),
+                            misses=emb_stats.get("misses", 0),
+                        )
                     )
     with col_clear:
-        if st.button("Clear Caches"):
+        if st.button(t("clear_caches_btn")):
             result = api_call("POST", "/api/cache/clear")
             if result and result.get("success"):
-                st.success("Caches cleared")
+                st.success(t("caches_cleared"))
 
     st.divider()
 
     # --- Metrics ---
-    st.subheader("API Metrics")
-    st.caption("Request counts, latencies, pipeline throughput (resets on API restart)")
+    st.subheader(t("api_metrics"))
+    st.caption(t("metrics_caption"))
 
-    if st.button("Refresh Metrics"):
+    if st.button(t("refresh_metrics_btn")):
         result = api_call("GET", "/api/metrics")
         if result and result.get("success"):
             mdata = result["data"]
@@ -712,106 +778,109 @@ with tab_stats:
             uptime_s = mdata.get("uptime_seconds", 0)
             hours = int(uptime_s // 3600)
             mins = int((uptime_s % 3600) // 60)
-            m1.metric("Uptime", f"{hours}h {mins}m")
+            m1.metric(t("uptime"), f"{hours}h {mins}m")
 
             counters = mdata.get("counters", {})
-            m2.metric("Total Requests", counters.get("requests_total", 0))
-            m3.metric("Errors", counters.get("errors_total", 0))
+            m2.metric(t("total_requests"), counters.get("requests_total", 0))
+            m3.metric(t("errors"), counters.get("errors_total", 0))
 
             # Pipeline counters
             if counters.get("ingest_total", 0) > 0:
                 p1, p2, p3, p4 = st.columns(4)
-                p1.metric("Ingestions", counters.get("ingest_total", 0))
-                p2.metric("Entities Extracted", counters.get("entities_extracted_total", 0))
-                p3.metric("Events Extracted", counters.get("events_extracted_total", 0))
-                p4.metric("Invalidated", counters.get("invalidated_total", 0))
+                p1.metric(t("ingestions"), counters.get("ingest_total", 0))
+                p2.metric(t("entities_extracted"), counters.get("entities_extracted_total", 0))
+                p3.metric(t("events_extracted"), counters.get("events_extracted_total", 0))
+                p4.metric(t("invalidated"), counters.get("invalidated_total", 0))
 
             # Search counters
             if counters.get("search_total", 0) > 0:
                 s1, s2 = st.columns(2)
-                s1.metric("Searches", counters.get("search_total", 0))
-                s2.metric("Results Returned", counters.get("search_results_total", 0))
+                s1.metric(t("searches"), counters.get("search_total", 0))
+                s2.metric(t("results_returned"), counters.get("search_results_total", 0))
 
             # Latency stats
             timings = mdata.get("timings", {})
             if timings:
-                st.markdown("**Latency (ms)**")
+                st.markdown(f"**{t('latency_ms')}**")
                 latency_rows = []
                 for name, stats in sorted(timings.items()):
                     if stats:
                         latency_rows.append(
                             {
-                                "Endpoint": name,
-                                "Count": stats.get("count", 0),
-                                "Avg": stats.get("avg_ms", 0),
+                                t("col_endpoint"): name,
+                                t("col_count"): stats.get("count", 0),
+                                t("col_avg"): stats.get("avg_ms", 0),
                                 "P50": stats.get("p50_ms", 0),
                                 "P95": stats.get("p95_ms", 0),
                                 "Max": stats.get("max_ms", 0),
                             }
                         )
                 if latency_rows:
-                    st.dataframe(latency_rows, use_container_width=True)
+                    st.dataframe(latency_rows, width="stretch")
 
     st.divider()
 
     # --- Export ---
-    st.subheader("Export / Import")
+    st.subheader(t("export_import"))
 
     col_exp, col_imp = st.columns(2)
 
     with col_exp:
-        if st.button("Export Graph Data"):
-            with st.spinner("Exporting..."):
+        if st.button(t("export_btn")):
+            with st.spinner(t("exporting")):
                 result = api_call("GET", "/api/export")
                 if result and result.get("success"):
                     export_data = result["data"]
                     export_json = json.dumps(export_data, indent=2, default=str)
                     st.download_button(
-                        label="Download JSON",
+                        label=t("download_json_btn"),
                         data=export_json,
                         file_name="tkb_export.json",
                         mime="application/json",
                     )
                     st.success(
-                        f"Entities: {len(export_data.get('entities', []))}, "
-                        f"Events: {len(export_data.get('events', []))}, "
-                        f"Episodes: {len(export_data.get('episodes', []))}"
+                        f"{t('entities')}: {len(export_data.get('entities', []))}, "
+                        f"{t('events')}: {len(export_data.get('events', []))}, "
+                        f"{t('episodes')}: {len(export_data.get('episodes', []))}"
                     )
 
     with col_imp:
-        uploaded = st.file_uploader("Import JSON", type=["json"], key="import_json")
+        uploaded = st.file_uploader(t("import_json_label"), type=["json"], key="import_json")
         if uploaded is not None:
             try:
                 import_data = json.loads(uploaded.read().decode("utf-8"))
             except (json.JSONDecodeError, UnicodeDecodeError):
-                st.error("Invalid JSON file")
+                st.error(t("invalid_json_file"))
                 import_data = None
 
             if import_data:
                 if import_data.get("version") != "1.0":
-                    st.warning("Unknown export version, may not be compatible")
+                    st.warning(t("unknown_version"))
                 st.info(
-                    f"Entities: {len(import_data.get('entities', []))}, "
-                    f"Events: {len(import_data.get('events', []))}, "
-                    f"Episodes: {len(import_data.get('episodes', []))}"
+                    f"{t('entities')}: {len(import_data.get('entities', []))}, "
+                    f"{t('events')}: {len(import_data.get('events', []))}, "
+                    f"{t('episodes')}: {len(import_data.get('episodes', []))}"
                 )
-                if st.button("Confirm Import"):
-                    with st.spinner("Importing..."):
+                if st.button(t("confirm_import_btn")):
+                    with st.spinner(t("importing")):
                         result = api_call("POST", "/api/import", json=import_data)
                         if result and result.get("success"):
                             counts = result["data"]
                             st.success(
-                                f"Imported: {counts.get('entities', 0)} entities, "
-                                f"{counts.get('events', 0)} events, "
-                                f"{counts.get('episodes', 0)} episodes, "
-                                f"{counts.get('relationships', 0)} relationships"
+                                t(
+                                    "imported_counts",
+                                    entities=counts.get("entities", 0),
+                                    events=counts.get("events", 0),
+                                    episodes=counts.get("episodes", 0),
+                                    rels=counts.get("relationships", 0),
+                                )
                             )
 
     st.divider()
 
     # --- Webhooks ---
-    st.subheader("Webhook Notifications")
-    st.caption("Get notified when facts are superseded (contradictions detected)")
+    st.subheader(t("webhook_notifications"))
+    st.caption(t("webhook_caption"))
 
     # Show existing webhooks
     wh_result = api_call("GET", "/api/webhooks")
@@ -824,21 +893,25 @@ with tab_stats:
                     f"**{wh.get('name', wh['url'])}** — `{wh['url']}`\n"
                     f"Events: {', '.join(wh.get('events', []))}"
                 )
-                if col_del.button("Remove", key=f"rm_{wh['url']}"):
+                if col_del.button(t("remove_btn"), key=f"rm_{wh['url']}"):
                     api_call("DELETE", f"/api/webhooks?url={wh['url']}")
                     st.rerun()
         else:
-            st.info("No webhooks configured.")
+            st.info(t("no_webhooks"))
 
     # Add new webhook
-    with st.expander("Add Webhook"):
-        wh_url = st.text_input("Webhook URL", placeholder="https://example.com/webhook")
-        wh_name = st.text_input("Name (optional)", placeholder="Slack notification")
-        if st.button("Register Webhook"):
+    with st.expander(t("add_webhook")):
+        wh_url = st.text_input(
+            t("webhook_url_label"), placeholder="https://example.com/webhook"
+        )
+        wh_name = st.text_input(
+            t("webhook_name_label"), placeholder="Slack notification"
+        )
+        if st.button(t("register_webhook_btn")):
             if wh_url:
                 result = api_call("POST", "/api/webhooks", json={"url": wh_url, "name": wh_name})
                 if result and result.get("success"):
-                    st.success(f"Webhook registered: {wh_url}")
+                    st.success(t("webhook_registered", url=wh_url))
                     st.rerun()
             else:
-                st.warning("Please enter a webhook URL")
+                st.warning(t("enter_webhook_url"))
