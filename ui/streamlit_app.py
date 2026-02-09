@@ -63,7 +63,7 @@ def api_call(method: str, path: str, **kwargs):
     """Make API call to FastAPI backend."""
     url = f"{API_BASE}{path}"
     headers = {"X-API-Key": API_KEY} if API_KEY else {}
-    timeout = kwargs.pop("timeout", 300)
+    timeout = kwargs.pop("timeout", 900)
     try:
         with httpx.Client(timeout=timeout, headers=headers) as client:
             if method == "GET":

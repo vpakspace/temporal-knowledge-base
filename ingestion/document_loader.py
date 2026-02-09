@@ -49,12 +49,19 @@ class DoclingLoader:
     def _get_converter(self) -> DocumentConverter:
         """Lazy-initialize Docling converter (models loaded on first call)."""
         if self._converter is None:
+            from docling.datamodel.accelerator_options import (
+                AcceleratorDevice,
+                AcceleratorOptions,
+            )
             from docling.datamodel.base_models import InputFormat
             from docling.datamodel.pipeline_options import PdfPipelineOptions
             from docling.document_converter import DocumentConverter, PdfFormatOption
 
             pipeline_options = PdfPipelineOptions()
             pipeline_options.generate_picture_images = True
+            pipeline_options.accelerator_options = AcceleratorOptions(
+                device=AcceleratorDevice.AUTO, num_threads=4
+            )
 
             self._converter = DocumentConverter(
                 format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
