@@ -9,6 +9,65 @@ from __future__ import annotations
 
 import re
 
+# Maximum characters per episode sent to Graphiti.
+# Zep docs recommend <=10,000 chars; we use 8,000 to leave margin.
+MAX_EPISODE_CHARS = 8_000
+
+
+def split_large_content(
+    text: str,
+    source: str,
+    max_chars: int = MAX_EPISODE_CHARS,
+) -> list[tuple[str, str]]:
+    """Split large text into episode-sized pieces for Graphiti.
+
+    Returns list of (content, source_name) tuples.
+    Splits at paragraph boundaries (\n\n); falls back to sentence/word boundaries.
+    """
+    if len(text) <= max_chars:
+        return [(text, source)]
+
+    paragraphs = re.split(r"\n\s*\n", text)
+    parts: list[tuple[str, str]] = []
+    current = ""
+    part_num = 1
+
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+
+        # If single paragraph exceeds limit, split it further
+        if len(para) > max_chars:
+            if current:
+                parts.append((current.strip(), f"{source}_part_{part_num}"))
+                part_num += 1
+                current = ""
+            # Split long paragraph at sentence boundaries
+            sentences = re.split(r"(?<=[.!?])\s+", para)
+            for sent in sentences:
+                if len(current) + len(sent) + 1 > max_chars:
+                    if current:
+                        parts.append((current.strip(), f"{source}_part_{part_num}"))
+                        part_num += 1
+                    current = sent
+                else:
+                    current = f"{current} {sent}".strip() if current else sent
+            continue
+
+        if len(current) + len(para) + 2 > max_chars:
+            if current:
+                parts.append((current.strip(), f"{source}_part_{part_num}"))
+                part_num += 1
+            current = para
+        else:
+            current = f"{current}\n\n{para}" if current else para
+
+    if current.strip():
+        parts.append((current.strip(), f"{source}_part_{part_num}"))
+
+    return parts
+
 
 class SemanticChunker:
     """Chunk text into semantically coherent pieces."""

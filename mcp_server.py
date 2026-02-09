@@ -185,15 +185,38 @@ async def _tkb_ingest_impl(
         except ValueError:
             ref_time = None
 
-    result = await state.pipeline.ingest_episode(
-        content=content,
-        source=source,
-        episode_type=ep_type,
-        reference_time=ref_time,
-        group_id=group_id,
-        metadata=doc_metadata,
-    )
-    return result
+    # Split large content into multiple episodes (Zep recommends <=10K chars)
+    from ingestion.chunker import split_large_content
+
+    parts = split_large_content(content, source)
+
+    if len(parts) == 1:
+        return await state.pipeline.ingest_episode(
+            content=parts[0][0],
+            source=parts[0][1],
+            episode_type=ep_type,
+            reference_time=ref_time,
+            group_id=group_id,
+            metadata=doc_metadata,
+        )
+
+    results = []
+    for part_content, part_source in parts:
+        r = await state.pipeline.ingest_episode(
+            content=part_content,
+            source=part_source,
+            episode_type=ep_type,
+            reference_time=ref_time,
+            group_id=group_id,
+            metadata=doc_metadata,
+        )
+        results.append(r)
+
+    return {
+        "parts": len(parts),
+        "total_chars": len(content),
+        "results": results,
+    }
 
 
 async def _tkb_search_impl(

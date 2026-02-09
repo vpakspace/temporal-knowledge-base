@@ -38,6 +38,7 @@ from generation.llm_client import LLMClient
 from generation.response_builder import ResponseBuilder
 from generation.temporal_verifier import TemporalVerifier
 from graphiti_adapter.client import GraphitiClient
+from ingestion.chunker import split_large_content
 from ingestion.document_loader import DoclingLoader
 from ingestion.pipeline import IngestionPipeline
 from retrieval.query_engine import QueryEngine
@@ -242,17 +243,35 @@ async def ingest_file(
     }
 
     try:
-        result = await pipeline.ingest_episode(
-            content=doc_result.markdown,
-            source=source or file.filename or "file_upload",
-            episode_type=EpisodeType.DOCUMENT,
-            reference_time=ref_time or datetime.now(UTC),
-            group_id=group_id,
-            metadata=episode_metadata,
-        )
+        src = source or file.filename or "file_upload"
+        ref = ref_time or datetime.now(UTC)
+
+        # Split large documents into multiple episodes (Zep recommends <=10K chars)
+        parts = split_large_content(doc_result.markdown, src)
+
+        if len(parts) > 1:
+            logger.info(
+                "Large document split into %d parts (%d chars total)",
+                len(parts),
+                len(doc_result.markdown),
+            )
+
+        results = []
+        for part_content, part_source in parts:
+            r = await pipeline.ingest_episode(
+                content=part_content,
+                source=part_source,
+                episode_type=EpisodeType.DOCUMENT,
+                reference_time=ref,
+                group_id=group_id,
+                metadata=episode_metadata,
+            )
+            results.append(r)
+
         return {
             "success": True,
-            "data": result,
+            "data": results[0] if len(results) == 1 else results,
+            "parts": len(parts),
             "document_stats": doc_result.metadata,
         }
     except Exception as e:

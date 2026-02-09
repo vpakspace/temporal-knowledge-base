@@ -26,6 +26,7 @@ _project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from ingestion.chunker import split_large_content
 from ingestion.document_loader import DoclingLoader
 from ui.i18n import get_translator  # type: ignore[import-not-found]
 
@@ -224,6 +225,9 @@ with tab_ingest:
                                 info_parts.append(f"{doc_meta['images_count']} {t('images')}")
                             if doc_meta.get("pages"):
                                 info_parts.append(f"{doc_meta['pages']} {t('pages')}")
+                        parts_count = len(split_large_content(content, ""))
+                        if parts_count > 1:
+                            info_parts.append(f"{parts_count} parts")
                         st.success(" | ".join(info_parts))
                         with st.expander(t("preview_content")):
                             st.text(content[:2000] + ("..." if len(content) > 2000 else ""))
@@ -249,25 +253,48 @@ with tab_ingest:
             group_id = st.text_input(t("group_id_label"), value="")
 
     if st.button(t("ingest_btn"), type="primary", disabled=not content):
-        with st.spinner(t("processing_episode")):
-            result = api_call(
-                "POST",
-                "/api/ingest",
-                json={
-                    "content": content,
-                    "source": source,
-                    "episode_type": episode_type,
-                    "group_id": group_id or None,
-                },
-            )
-            if result and result.get("success"):
-                data = result["data"]
-                st.success(t("episode_ingested"))
+        parts = split_large_content(content, source)
+        progress_text = (
+            f"Processing {len(parts)} parts..." if len(parts) > 1 else t("processing_episode")
+        )
+        with st.spinner(progress_text):
+            all_results: list[dict] = []
+            progress_bar = st.progress(0) if len(parts) > 1 else None
+            for i, (part_content, part_source) in enumerate(parts):
+                result = api_call(
+                    "POST",
+                    "/api/ingest",
+                    json={
+                        "content": part_content,
+                        "source": part_source,
+                        "episode_type": episode_type,
+                        "group_id": group_id or None,
+                    },
+                )
+                if result and result.get("success"):
+                    all_results.append(result["data"])
+                if progress_bar:
+                    progress_bar.progress((i + 1) / len(parts))
+
+            if progress_bar:
+                progress_bar.empty()
+
+            if all_results:
+                # Aggregate metrics across all parts
+                total_entities = sum(r.get("entities_extracted", 0) for r in all_results)
+                total_events = sum(r.get("temporal_events", 0) for r in all_results)
+                total_rels = sum(r.get("relationships", 0) for r in all_results)
+                total_inv = sum(r.get("invalidated", 0) for r in all_results)
+
+                if len(parts) > 1:
+                    st.success(f"{t('episode_ingested')} ({len(all_results)}/{len(parts)} parts)")
+                else:
+                    st.success(t("episode_ingested"))
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric(t("entities"), data.get("entities_extracted", 0))
-                c2.metric(t("events"), data.get("temporal_events", 0))
-                c3.metric(t("relations"), data.get("relationships", 0))
-                c4.metric(t("invalidated"), data.get("invalidated", 0))
+                c1.metric(t("entities"), total_entities)
+                c2.metric(t("events"), total_events)
+                c3.metric(t("relations"), total_rels)
+                c4.metric(t("invalidated"), total_inv)
 
 # --- Tab 2: Search ---
 with tab_search:
