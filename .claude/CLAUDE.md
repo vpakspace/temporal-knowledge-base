@@ -9,7 +9,7 @@
 
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
-**Latest commit**: `16622d7`
+**Latest commit**: `d21c195`
 **Тесты**: 117 unit + 30 integration = 147 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
@@ -22,7 +22,7 @@
 - **FastAPI** (API сервер, порт 8000)
 - **Streamlit** (UI, порт 8501)
 - **Pydantic v2** (модели данных)
-- **IBM Docling** (document processing: PDF, DOCX, PPTX, XLSX, HTML — tables, images, OCR, GPU-accelerated)
+- **IBM Docling** (document processing: PDF, DOCX, PPTX, XLSX, HTML — tables, images, OCR)
 
 ## Архитектура
 
@@ -245,10 +245,9 @@ PYTHONPATH=. pytest tests/test_mcp_server.py -v
 **Module**: `ingestion/document_loader.py` — `DoclingLoader` + `DocumentResult`
 
 **Supported formats**: PDF, DOCX, PPTX, XLSX, HTML, TXT, MD
-**Features**: TableFormer (table extraction), OCR, image classification, **GPU acceleration** (CUDA AUTO)
+**Features**: TableFormer (table extraction), OCR, image classification
 **Lazy init**: Models (~1-2GB) downloaded on first call to `_get_converter()`
-**GPU**: `AcceleratorDevice.AUTO` — uses CUDA (RTX 4080) if available, CPU fallback with `num_threads=4`
-**Import**: `from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions` (NOT from `pipeline_options`)
+**GPU**: REVERTED — `AcceleratorDevice.AUTO` caused regression (slower than CPU-only). CUDA available but Docling overhead makes it worse.
 
 ```python
 from ingestion.document_loader import DoclingLoader
@@ -318,7 +317,8 @@ Applied in 6 methods: `get_graph_data`, `get_all_entities`, `get_entity_details`
 - [x] i18n — Russian/English language selector ✅ `6aed7b9`
 - [x] COALESCE fix for Graphiti uuid/labels property mismatch ✅ `5634e1c`
 - [x] Clear database button in UI with DELETE confirmation ✅ `895b637`
-- [x] GPU acceleration for Docling (AcceleratorDevice.AUTO) + UI timeout 15min ✅ `16622d7`
+- [x] ~~GPU acceleration for Docling~~ REVERTED (caused regression) `16622d7` → `d21c195`
+- [x] UI timeout removed (None = no limit) ✅ `d21c195`
 
 ## План улучшений (2026-02-08)
 
