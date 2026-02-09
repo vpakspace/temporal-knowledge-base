@@ -2,6 +2,9 @@ services:
   neo4j:
     image: neo4j:5-community
     container_name: temporal-kb-neo4j
+    hostname: neo4j
+    extra_hosts:
+      - "neo4j:127.0.0.1"
     ports:
       - "7474:7474"   # HTTP browser
       - "7687:7687"   # Bolt protocol
