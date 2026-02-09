@@ -512,6 +512,16 @@ To run only Neo4j (and install Python locally):
 docker compose up -d neo4j
 ```
 
+> **WSL2 + Docker Desktop users:** If Neo4j fails with `UnknownHostException`, run it standalone instead:
+>
+> ```bash
+> docker run -d --name temporal-kb-neo4j -p 7474:7474 -p 7687:7687 \
+>   -e NEO4J_AUTH=neo4j/temporal_kb_2026 -e "NEO4J_PLUGINS=[\"apoc\"]" \
+>   neo4j:5-community
+> ```
+>
+> Then start API and UI locally: `./run_api.sh` and `./run_streamlit.sh`
+
 ## License
 
 MIT
