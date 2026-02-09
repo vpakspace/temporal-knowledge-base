@@ -9,8 +9,8 @@
 
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
-**Latest commit**: `d21c195`
-**Тесты**: 117 unit + 30 integration = 147 total
+**Latest commit**: `8eb98a3`
+**Тесты**: 124 unit + 30 integration = 154 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -60,13 +60,13 @@ Layers 6-7:  Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
 | `core/` | Config (pydantic-settings), models (13 Pydantic), exceptions, TTL cache, webhooks |
 | `storage/` | Neo4j async client (bi-temporal CRUD, point-in-time), vector store |
 | `graphiti_adapter/` | Graphiti client wrapper, search recipes (RRF/MMR) |
-| `ingestion/` | Pipeline (5 stages), semantic chunker (table-aware), dual-track extractor, DoclingLoader |
+| `ingestion/` | Pipeline (5 stages), semantic chunker (table-aware), `split_large_content()`, dual-track extractor, DoclingLoader |
 | `temporal/` | Invalidation agent, entity resolution |
 | `retrieval/` | Query engine (intent-aware search) |
 | `generation/` | LLM client, temporal verifier (Layer 14), response builder |
 | `api/` | FastAPI server (23 endpoints), auth middleware |
 | `ui/` | Streamlit UI (7 tabs), i18n (en/ru) |
-| `tests/` | 117 unit + 30 integration = 147 total |
+| `tests/` | 124 unit + 30 integration = 154 total |
 
 ## Запуск
 
@@ -262,6 +262,24 @@ print(result.metadata)   # {format, pages, tables_count, images_count}
 
 **Table-aware chunking**: `SemanticChunker` preserves markdown tables (`| ... |`) as atomic units — never splits tables across chunks.
 
+### Large Document Splitting (2026-02-09)
+
+**Problem**: Documents >8K chars sent as one episode cause Graphiti to generate 300+ internal LLM calls (each ~3K token chunk × 3-5 calls), taking hours.
+
+**Solution**: `split_large_content()` in `ingestion/chunker.py` pre-splits at paragraph/sentence boundaries into ~8K char episodes before Graphiti ingestion.
+
+```python
+from ingestion.chunker import split_large_content, MAX_EPISODE_CHARS  # 8_000
+parts = split_large_content(text, source_name)  # → [(content, "src_part_1"), ...]
+```
+
+**Applied in 3 places**:
+- `api/server.py` — `/api/ingest/file` endpoint
+- `mcp_server.py` — `_tkb_ingest_impl()` (MCP + direct text)
+- `ui/streamlit_app.py` — progress bar per part, aggregated metrics
+
+**Graphiti internal chunking** (for reference): `CHUNK_TOKEN_SIZE=3000` (~12K chars), density-based, in `graphiti_core/utils/content_chunking.py`.
+
 ### i18n (Internationalization)
 
 **Module**: `ui/i18n.py` — ~180 translation keys (en/ru)
@@ -319,6 +337,7 @@ Applied in 6 methods: `get_graph_data`, `get_all_entities`, `get_entity_details`
 - [x] Clear database button in UI with DELETE confirmation ✅ `895b637`
 - [x] ~~GPU acceleration for Docling~~ REVERTED (caused regression) `16622d7` → `d21c195`
 - [x] UI timeout removed (None = no limit) ✅ `d21c195`
+- [x] Large document splitting (>8K chars → multiple episodes) ✅ `8eb98a3`
 
 ## План улучшений (2026-02-08)
 
