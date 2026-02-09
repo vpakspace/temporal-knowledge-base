@@ -121,6 +121,7 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_LLM_MODEL=gpt-4o-mini
 
 # API authentication (empty = auth disabled)
+# Generate your own secret: python3 -c "import secrets; print(secrets.token_hex(32))"
 APP_API_KEY=
 EOF
 ```
@@ -432,7 +433,7 @@ All settings can be configured via environment variables or `.env` file:
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
 | `OPENAI_LLM_MODEL` | `gpt-4o-mini` | LLM model for extraction/generation |
 | `OPENAI_LLM_TEMPERATURE` | `0.0` | LLM temperature |
-| `APP_API_KEY` | *(empty)* | API authentication key (empty = auth disabled) |
+| `APP_API_KEY` | *(empty)* | Self-generated secret for API auth. When set, all `/api/*` endpoints require `X-API-Key` header. Empty = open access. Generate: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 | `APP_INVALIDATION_SIMILARITY_THRESHOLD` | `0.5` | Min similarity for invalidation |
 | `APP_DEFAULT_SEARCH_LIMIT` | `10` | Default search result limit |
 
