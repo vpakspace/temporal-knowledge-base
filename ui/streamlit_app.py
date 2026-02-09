@@ -259,22 +259,38 @@ with tab_ingest:
         )
         with st.spinner(progress_text):
             all_results: list[dict] = []
+            failed_parts: list[int] = []
             progress_bar = st.progress(0) if len(parts) > 1 else None
+            status_text = st.empty() if len(parts) > 1 else None
             for i, (part_content, part_source) in enumerate(parts):
-                result = api_call(
-                    "POST",
-                    "/api/ingest",
-                    json={
-                        "content": part_content,
-                        "source": part_source,
-                        "episode_type": episode_type,
-                        "group_id": group_id or None,
-                    },
-                )
+                if status_text:
+                    status_text.text(f"Part {i + 1}/{len(parts)}: {part_source}")
+                # Retry up to 2 times on failure
+                result = None
+                for attempt in range(3):
+                    result = api_call(
+                        "POST",
+                        "/api/ingest",
+                        json={
+                            "content": part_content,
+                            "source": part_source,
+                            "episode_type": episode_type,
+                            "group_id": group_id or None,
+                        },
+                    )
+                    if result and result.get("success"):
+                        break
+                    if attempt < 2:
+                        import time
+                        time.sleep(3)  # Wait before retry (rate limit)
                 if result and result.get("success"):
                     all_results.append(result["data"])
+                else:
+                    failed_parts.append(i + 1)
                 if progress_bar:
                     progress_bar.progress((i + 1) / len(parts))
+            if status_text:
+                status_text.empty()
 
             if progress_bar:
                 progress_bar.empty()
@@ -287,7 +303,11 @@ with tab_ingest:
                 total_inv = sum(r.get("invalidated", 0) for r in all_results)
 
                 if len(parts) > 1:
-                    st.success(f"{t('episode_ingested')} ({len(all_results)}/{len(parts)} parts)")
+                    msg = f"{t('episode_ingested')} ({len(all_results)}/{len(parts)} parts)"
+                    if failed_parts:
+                        st.warning(f"{msg} — {len(failed_parts)} parts failed: {failed_parts[:10]}")
+                    else:
+                        st.success(msg)
                 else:
                     st.success(t("episode_ingested"))
                 c1, c2, c3, c4 = st.columns(4)

@@ -195,8 +195,8 @@ async def ingest_episode(req: IngestRequest):
         )
         return {"success": True, "data": result}
     except Exception as e:
-        logger.exception("Ingest failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Ingest failed for source=%s", req.source)
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/ingest/file", dependencies=_auth)
