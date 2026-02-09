@@ -2,7 +2,20 @@
 
 [![CI](https://github.com/vpakspace/temporal-knowledge-base/actions/workflows/ci.yml/badge.svg)](https://github.com/vpakspace/temporal-knowledge-base/actions/workflows/ci.yml)
 
-Bi-temporal knowledge graph framework built on [Graphiti](https://github.com/getzep/graphiti) (Zep AI) and the GraphOS 16-layer architecture. Ingest text, documents, and structured data into a Neo4j-backed temporal graph with automatic entity resolution, fact invalidation, and hybrid search.
+Bi-temporal knowledge graph framework built on [Graphiti](https://github.com/getzep/graphiti) (Zep AI) with a 16-layer architecture inspired by [GraphOS](https://arxiv.org/abs/2502.02767) — a reference design for knowledge graph operating systems that separates ingestion, storage, retrieval, and generation into composable layers. Ingest text, documents, and structured data into a Neo4j-backed temporal graph with automatic entity resolution, fact invalidation, and hybrid search.
+
+## Quick Start
+
+```bash
+git clone https://github.com/vpakspace/temporal-knowledge-base.git
+cd temporal-knowledge-base
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+docker compose up -d              # Start Neo4j
+echo 'OPENAI_API_KEY=sk-...' > .env
+./run_api.sh                      # http://localhost:8000
+./run_streamlit.sh                # http://localhost:8501 (in another terminal)
+```
 
 ## Key Features
 
@@ -23,15 +36,38 @@ Bi-temporal knowledge graph framework built on [Graphiti](https://github.com/get
 - **API authentication** — optional `X-API-Key` header for all `/api/*` endpoints
 - **Three interfaces** — REST API (FastAPI), Web UI (Streamlit 7 tabs), and MCP server (Claude Code integration)
 
+## Screenshots
+
+| Search with temporal hints | Knowledge graph visualization |
+|:-:|:-:|
+| ![Search](docs/screenshots/search.png) | ![Graph](docs/screenshots/graph.png) |
+
+| Entity explorer | Contradiction dashboard |
+|:-:|:-:|
+| ![Entities](docs/screenshots/entities.png) | ![Contradictions](docs/screenshots/contradictions.png) |
+
 ## Architecture
 
 ```
-Layers 1-4:   FastAPI + Streamlit (Intent Classification, Query Decomposition)
-Layers 12-16: Response Builder + Temporal Verifier (Layer 14)
-Layers 8-11:  Query Engine (Hybrid Search: RRF/MMR + Temporal Query Engine)
-Layer 5:      Ingestion Pipeline (5 stages: load → chunk → extract → resolve → write)
-Layers 6-7:   Neo4j (bi-temporal) + Vector Store (OpenAI embeddings)
-              └─ Graphiti Core (add_episode, search, invalidation)
+┌─────────────────────────────────────────────────────────────────┐
+│  Layers 1-4    API & UI Layer                                   │
+│                FastAPI (REST) + Streamlit (7 tabs)               │
+│                Intent Classification, Query Decomposition        │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 5       Ingestion Pipeline                               │
+│                load → chunk → extract → resolve → write          │
+├─────────────────────────────────────────────────────────────────┤
+│  Layers 6-7    Storage Layer                                    │
+│                Neo4j (bi-temporal) + Vector Store (embeddings)   │
+│                └─ Graphiti Core (add_episode, search)            │
+├─────────────────────────────────────────────────────────────────┤
+│  Layers 8-11   Query Engine                                     │
+│                Hybrid Search: RRF/MMR + Temporal Filtering       │
+├─────────────────────────────────────────────────────────────────┤
+│  Layers 12-16  Response & Verification                          │
+│                Response Builder + Temporal Verifier (Layer 14)   │
+│                Contradiction Detection, Fact Validation          │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -301,6 +337,7 @@ Add to `~/.claude.json`:
       "args": ["mcp_launcher.py"],
       "cwd": "/path/to/temporal-knowledge-base",
       "env": {
+        "OPENAI_API_KEY": "sk-your-openai-api-key",
         "NEO4J_URI": "bolt://localhost:7687",
         "NEO4J_USER": "neo4j",
         "NEO4J_PASSWORD": "temporal_kb_2026"
@@ -449,6 +486,31 @@ All settings can be configured via environment variables or `.env` file:
 - **[Pydantic](https://docs.pydantic.dev/) v2** — data models and settings
 - **[streamlit-agraph](https://github.com/ChrisDelClea/streamlit-agraph)** — interactive graph visualization
 - **[httpx](https://www.python-httpx.org/)** — async HTTP client (webhooks)
+
+## Docker (Full Stack)
+
+Run the entire stack (Neo4j + API + UI) without installing Python dependencies:
+
+```bash
+# 1. Create .env file (see "Configure environment" above)
+
+# 2. Start all services
+docker compose up -d --build
+
+# 3. Wait for healthy status
+docker compose ps
+```
+
+Once healthy:
+- **API**: http://localhost:8000 (docs at `/docs`)
+- **UI**: http://localhost:8501
+- **Neo4j Browser**: http://localhost:7474
+
+To run only Neo4j (and install Python locally):
+
+```bash
+docker compose up -d neo4j
+```
 
 ## License
 
