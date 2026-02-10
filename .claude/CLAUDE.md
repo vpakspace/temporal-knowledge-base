@@ -9,8 +9,8 @@
 
 **Расположение**: `~/temporal-knowledge-base/`
 **Создан**: 2026-02-07
-**Latest commit**: `8eb98a3`
-**Тесты**: 124 unit + 30 integration = 154 total
+**Latest commit**: `183e475`
+**Тесты**: 130 unit + 30 integration = 160 total
 **README**: https://github.com/vpakspace/temporal-knowledge-base
 
 ## Технологический стек
@@ -280,6 +280,14 @@ parts = split_large_content(text, source_name)  # → [(content, "src_part_1"), 
 
 **Graphiti internal chunking** (for reference): `CHUNK_TOKEN_SIZE=3000` (~12K chars), density-based, in `graphiti_core/utils/content_chunking.py`.
 
+### Lucene Sanitization (2026-02-10)
+
+**Problem**: Graphiti passes entity names to Neo4j fulltext index (Apache Lucene) via `db.index.fulltext.queryNodes()` without escaping special characters. Characters like `/` in `meta-llama/Llama-3.1-8B-Instruct` cause `TokenMgrError`.
+
+**Solution**: `sanitize_for_graphiti()` in `ingestion/chunker.py` replaces Lucene special chars (`+ - & | ! ( ) { } [ ] ^ " ~ * ? : \ /`) with spaces before content reaches Graphiti.
+
+**Applied in**: `GraphitiClient.add_episode()` — single entry point for ALL ingestion paths (API, MCP, pipeline).
+
 ### i18n (Internationalization)
 
 **Module**: `ui/i18n.py` — ~180 translation keys (en/ru)
@@ -338,6 +346,8 @@ Applied in 6 methods: `get_graph_data`, `get_all_entities`, `get_entity_details`
 - [x] ~~GPU acceleration for Docling~~ REVERTED (caused regression) `16622d7` → `d21c195`
 - [x] UI timeout removed (None = no limit) ✅ `d21c195`
 - [x] Large document splitting (>8K chars → multiple episodes) ✅ `8eb98a3`
+- [x] Retry + graceful error handling for multi-part ingestion ✅ `4a8252c`
+- [x] Lucene special char sanitization before Graphiti ingestion ✅ `183e475`
 
 ## План улучшений (2026-02-08)
 
