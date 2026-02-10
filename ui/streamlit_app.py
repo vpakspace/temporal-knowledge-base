@@ -282,6 +282,7 @@ with tab_ingest:
                         break
                     if attempt < 2:
                         import time
+
                         time.sleep(3)  # Wait before retry (rate limit)
                 if result and result.get("success"):
                     all_results.append(result["data"])
