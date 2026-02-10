@@ -28,6 +28,7 @@ from graphiti_core.search.search_filters import SearchFilters
 from core.config import AppSettings
 from core.exceptions import EpisodeProcessingError, SearchError
 from core.models import EpisodeType
+from ingestion.chunker import sanitize_for_graphiti
 
 logger = logging.getLogger(__name__)
 
@@ -107,9 +108,10 @@ class GraphitiClient:
         graphiti_type = _EPISODE_TYPE_MAP.get(episode_type, GraphitiEpisodeType.text)
 
         try:
+            safe_content = sanitize_for_graphiti(content)
             result = await self.graphiti.add_episode(
                 name=name,
-                episode_body=content,
+                episode_body=safe_content,
                 source_description=source,
                 reference_time=reference_time,
                 source=graphiti_type,

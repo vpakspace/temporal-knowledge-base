@@ -13,6 +13,25 @@ import re
 # Zep docs recommend <=10,000 chars; we use 8,000 to leave margin.
 MAX_EPISODE_CHARS = 8_000
 
+# Lucene special characters that break Neo4j fulltext queries.
+# Graphiti uses db.index.fulltext.queryNodes internally for entity
+# deduplication, passing raw entity names without escaping.
+# Characters: + - && || ! ( ) { } [ ] ^ " ~ * ? : \ /
+_LUCENE_SPECIAL_RE = re.compile(r'[+\-&|!(){}[\]^"~*?:\\/]')
+
+
+def sanitize_for_graphiti(text: str) -> str:
+    """Remove Lucene special characters that break Neo4j fulltext queries.
+
+    Graphiti internally passes entity names to Neo4j fulltext index
+    (Apache Lucene) without escaping. Characters like / * ? ~ etc.
+    cause ``TokenMgrError`` during entity deduplication.
+
+    This function replaces problematic characters with spaces,
+    preserving readability while preventing Lucene parsing errors.
+    """
+    return _LUCENE_SPECIAL_RE.sub(" ", text)
+
 
 def split_large_content(
     text: str,

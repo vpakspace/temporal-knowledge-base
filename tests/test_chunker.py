@@ -1,6 +1,6 @@
 """Tests for semantic chunker."""
 
-from ingestion.chunker import SemanticChunker, split_large_content
+from ingestion.chunker import SemanticChunker, sanitize_for_graphiti, split_large_content
 
 
 def test_short_text_no_split():
@@ -105,3 +105,37 @@ def test_split_long_paragraph():
     text = "This is sentence one. " * 500  # ~11,000 chars, no paragraph breaks
     parts = split_large_content(text, "src", max_chars=5000)
     assert len(parts) >= 2
+
+
+# --- Tests for sanitize_for_graphiti ---
+
+
+def test_sanitize_removes_slashes():
+    assert "/" not in sanitize_for_graphiti("meta-llama/Llama-3.1-8B-Instruct")
+    assert "\\" not in sanitize_for_graphiti("C:\\Users\\doc.txt")
+
+
+def test_sanitize_removes_lucene_special_chars():
+    special = '+ - && || ! ( ) { } [ ] ^ " ~ * ? : \\ /'
+    result = sanitize_for_graphiti(special)
+    for ch in '+-!(){}[]^"~*?:\\/':
+        assert ch not in result
+
+
+def test_sanitize_preserves_normal_text():
+    text = "The quick brown fox jumps over the lazy dog."
+    assert sanitize_for_graphiti(text) == text
+
+
+def test_sanitize_preserves_cyrillic():
+    text = "Компания Apple выпустила новый iPhone в 2024 году"
+    assert sanitize_for_graphiti(text) == text
+
+
+def test_sanitize_replaces_with_space():
+    assert sanitize_for_graphiti("a/b") == "a b"
+    assert sanitize_for_graphiti("a*b") == "a b"
+
+
+def test_sanitize_empty_string():
+    assert sanitize_for_graphiti("") == ""
